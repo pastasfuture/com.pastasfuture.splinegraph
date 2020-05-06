@@ -1,9 +1,11 @@
 {
     "name": "com.pastasfuture.splinegraph.Editor",
     "references": [
-        "GUID:df380645f10b7bc4b97d4f5eb6303d95",
-        "GUID:3eae0364be2026648bf74846acb8a731",
-        "GUID:b03a6ff99fbd6d7428c7551a122d3626"
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:b75d3cd3037d383a8d1e2f9a26d73d8a",
+        "GUID:d8b63aba1907145bea998dd612889d6b",
+        "GUID:329b4ccd385744985bf3f83cfd77dfe7",
+        "GUID:801a8c1e759afc54695bb276b6037934"
     ],
     "includePlatforms": [
         "Editor"
