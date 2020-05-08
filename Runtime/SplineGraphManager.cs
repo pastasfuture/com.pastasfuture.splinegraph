@@ -143,6 +143,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float3 positionParent = splineGraph.payload.positions.data[v0];
                 quaternion rotationParent = splineGraph.payload.rotations.data[v0];
                 float2 scaleParent = splineGraph.payload.scales.data[v0];
+                float2 leashParent = splineGraph.payload.leashes.data[v0];
 
                 for (Int16 v1 = (Int16)(v0 + 1); v1 < v0Count; ++v1)
                 {
@@ -152,14 +153,18 @@ namespace Pastasfuture.SplineGraph.Runtime
                     float3 positionChild = splineGraph.payload.positions.data[v1];
                     quaternion rotationChild = splineGraph.payload.rotations.data[v1];
                     float2 scaleChild = splineGraph.payload.scales.data[v1];
+                    float2 leashChild = splineGraph.payload.leashes.data[v1];
 
                     float positionDelta2 = math.lengthsq(positionParent - positionChild);
 
                     float positionMagnitude = math.max(math.cmax(math.abs(positionParent)), math.cmax(math.abs(positionChild)));
 
+                    float leashDelta2 = math.lengthsq(leashParent - leashChild);
+
                     float epsilon = 1e-2f;//(positionMagnitude < 2.0f) ? 1e-5f : (math.log2(positionMagnitude) * 1e-5f);
 
                     if (positionDelta2 > (epsilon * epsilon)) { continue; }
+                    if (leashDelta2 > (epsilon * epsilon)) { continue; }
                     if (!(math.any(math.abs(rotationParent.value - rotationChild.value) < 1e-2f)
                         || math.any(math.abs(rotationParent.value + rotationChild.value) < 1e-2f)))
                     {
@@ -185,12 +190,13 @@ namespace Pastasfuture.SplineGraph.Runtime
                     splineGraph.payload.positions.data[v0] = (positionParent * 0.5f + positionChild * 0.5f);
                     splineGraph.payload.rotations.data[v0] = math.slerp(rotationParent, rotationChild, 0.5f);
                     
-                    // Weighted average vertex payload scale data.
+                    // Weighted average vertex payload scale and leash data.
                     {
                         float v0ParentCount = (float)splineGraph.VertexComputeParentCount(v0);
                         float v0ChildCount = (float)splineGraph.VertexComputeChildCount(v0);
                         float v1ParentCount = (float)splineGraph.VertexComputeParentCount(v1);
                         float v1ChildCount = (float)splineGraph.VertexComputeChildCount(v1);
+
                         float scaleX = ((v0ParentCount + v1ParentCount) > 0.0f)
                             ? ((splineGraph.payload.scales.data[v0].x * v0ParentCount + splineGraph.payload.scales.data[v1].x * v1ParentCount) / (v0ParentCount + v1ParentCount))
                             : (splineGraph.payload.scales.data[v0].x);
@@ -198,8 +204,15 @@ namespace Pastasfuture.SplineGraph.Runtime
                             ? ((splineGraph.payload.scales.data[v0].y * v0ChildCount + splineGraph.payload.scales.data[v1].y * v1ChildCount) / (v0ChildCount + v1ChildCount))
                             : (splineGraph.payload.scales.data[v0].y);
                         splineGraph.payload.scales.data[v0] = new float2(scaleX, scaleY);
-                    }
 
+                        float leashX = ((v0ParentCount + v1ParentCount) > 0.0f)
+                            ? ((splineGraph.payload.leashes.data[v0].x * v0ParentCount + splineGraph.payload.leashes.data[v1].x * v1ParentCount) / (v0ParentCount + v1ParentCount))
+                            : (splineGraph.payload.leashes.data[v0].x);
+                        float leashY = ((v0ChildCount + v1ChildCount) > 0.0f)
+                            ? ((splineGraph.payload.leashes.data[v0].y * v0ChildCount + splineGraph.payload.leashes.data[v1].y * v1ChildCount) / (v0ChildCount + v1ChildCount))
+                            : (splineGraph.payload.leashes.data[v0].y);
+                        splineGraph.payload.leashes.data[v0] = new float2(leashX, leashY);
+                    }
                     splineGraph.VertexMerge(v0, v1, Allocator.Persistent);
                 }
 
@@ -288,6 +301,24 @@ namespace Pastasfuture.SplineGraph.Runtime
                     continue;
                 }
 
+                float2 vertex0LeashOS = splineGraph.payload.leashes.data[v0];
+                float2 vertex0ChildLeashOS = splineGraph.payload.leashes.data[vertex0ChildIndex];
+                float3 vertex0LeashWS = math.mul(vertex0Rotation, new float3(vertex0LeashOS, 0.0f));
+                float3 vertex0ChildLeashWS = math.mul(vertex0Rotation, new float3(vertex0ChildLeashOS, 0.0f));
+                if (math.any(math.abs(vertex0LeashWS - vertex0ChildLeashWS) > 1e-3f))
+                {
+                    // Leash is not identical, cannot be a linear path.
+                    continue;
+                }
+
+                float2 vertex0ChildChildLeashOS = splineGraph.payload.leashes.data[vertex0ChildChildIndex];
+                float3 vertex0ChildChildLeashWS = math.mul(vertex0ChildChildRotation, new float3(vertex0ChildChildLeashOS, 0.0f));
+                if (math.any(math.abs(vertex0ChildLeashWS - vertex0ChildChildLeashWS) > 1e-3f))
+                {
+                    // Leash is not identical, cannot be a linear path.
+                    continue;
+                }
+
                 // Found a linear path!
                 // Note, we do not actually care about a scale differences.
                 // All we care about is making sure scaleIn at vertex0 is maintained, and scaleOut at vertex0ChildChildRotation is maintained.
@@ -324,15 +355,22 @@ namespace Pastasfuture.SplineGraph.Runtime
                     float3 position = splineGraph.payload.positions.data[v];
                     quaternion rotation = splineGraph.payload.rotations.data[v];
                     float2 scale = splineGraph.payload.scales.data[v];
+                    float2 leash = splineGraph.payload.leashes.data[v];
 
                     float3 forwardOS = math.mul(rotation, new float3(0.0f, 0.0f, 1.0f));
                     float3 tangentOS = math.mul(rotation, new float3(1.0f, 0.0f, 0.0f));
                     float3 bitangentOS = math.mul(rotation, new float3(0.0f, 1.0f, 0.0f));
                     float3 forwardWS = instanceTransform.TransformVector(forwardOS);
+                    float3 tangentWS = instanceTransform.TransformVector(tangentOS);
                     float3 bitangentWS = instanceTransform.TransformVector(bitangentOS);
                     float3 forwardMOS = transform.InverseTransformVector(forwardWS);
+                    float3 tangentMOS = transform.InverseTransformVector(tangentWS);
                     float3 bitangentMOS = transform.InverseTransformVector(bitangentWS);
                     float mosFromInstanceOSScale = math.length(forwardMOS);
+                    float2 mosFromInstanceOSLeashScale = new float2(
+                        math.length(tangentMOS),
+                        math.length(bitangentMOS)
+                    );
 
                     // Construct manager-object-space rotation from transformed frame, so that scale can be accounted for in final rotation.
                     // In particular, we care about this for using -1 scale to perform mirroring of graph in X, Y, or Z.
@@ -345,10 +383,12 @@ namespace Pastasfuture.SplineGraph.Runtime
                     position = transform.InverseTransformPoint(position);
                     rotation = rotationMOS;
                     scale = scale * mosFromInstanceOSScale;
+                    leash = leash * mosFromInstanceOSLeashScale;
 
                     splineGraph.payload.positions.data[v] = position;
                     splineGraph.payload.rotations.data[v] = rotation;
                     splineGraph.payload.scales.data[v] = scale;
+                    splineGraph.payload.leashes.data[v] = leash;
                 }
                 for (Int16 v = vertexStart; v < vertexEnd; ++v)
                 {
@@ -540,6 +580,9 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 float2 scale = sgm.splineGraph.payload.scales.data[v];
                 EditorGUILayout.Vector2Field("Scale", scale);
+
+                float2 leash = sgm.splineGraph.payload.leashes.data[v];
+                EditorGUILayout.Vector2Field("Leash", leash);
 
                 EditorGUILayout.EndVertical();
             }

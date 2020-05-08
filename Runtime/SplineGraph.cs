@@ -160,8 +160,11 @@ namespace Pastasfuture.SplineGraph.Runtime
         public float3[] positions;
         public quaternion[] rotations;
         public float2[] scales;
+        public float2[] leashes;
         public SplineMath.Spline[] edgeParentToChildSplines;
         public SplineMath.Spline[] edgeChildToParentSplines;
+        public SplineMath.Spline[] edgeParentToChildSplinesLeashes;
+        public SplineMath.Spline[] edgeChildToParentSplinesLeashes;
         public float[] edgeLengths;
     }
 
@@ -170,10 +173,13 @@ namespace Pastasfuture.SplineGraph.Runtime
         public NativeArrayDynamic<float3> positions;
         public NativeArrayDynamic<quaternion> rotations;
         public NativeArrayDynamic<float2> scales;
+        public NativeArrayDynamic<float2> leashes;
 
         // Same spline segments stored at different locations to accelerate queries in either direction.
         public NativeArrayDynamic<SplineMath.Spline> edgeParentToChildSplines;
         public NativeArrayDynamic<SplineMath.Spline> edgeChildToParentSplines;
+        public NativeArrayDynamic<SplineMath.Spline> edgeParentToChildSplinesLeashes;
+        public NativeArrayDynamic<SplineMath.Spline> edgeChildToParentSplinesLeashes;
 
         public NativeArrayDynamic<float> edgeLengths;
 
@@ -183,9 +189,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             res.positions = new NativeArrayDynamic<float3>(1, allocator);
             res.rotations = new NativeArrayDynamic<quaternion>(1, allocator);
             res.scales = new NativeArrayDynamic<float2>(1, allocator);
+            res.leashes = new NativeArrayDynamic<float2>(1, allocator);
 
             res.edgeParentToChildSplines = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
             res.edgeChildToParentSplines = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
+            res.edgeParentToChildSplinesLeashes = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
+            res.edgeChildToParentSplinesLeashes = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
             res.edgeLengths = new NativeArrayDynamic<float>(1, allocator);
         }
 
@@ -194,8 +203,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.Dispose();
             rotations.Dispose();
             scales.Dispose();
+            leashes.Dispose();
             edgeParentToChildSplines.Dispose();
             edgeChildToParentSplines.Dispose();
+            edgeParentToChildSplinesLeashes.Dispose();
+            edgeChildToParentSplinesLeashes.Dispose();
             edgeLengths.Dispose();
         }
 
@@ -204,8 +216,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.Clear();
             rotations.Clear();
             scales.Clear();
+            leashes.Clear();
             edgeParentToChildSplines.Clear();
             edgeChildToParentSplines.Clear();
+            edgeParentToChildSplinesLeashes.Clear();
+            edgeChildToParentSplinesLeashes.Clear();
             edgeLengths.Clear();
         }
 
@@ -217,8 +232,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.ToArray(ref o.positions);
             rotations.ToArray(ref o.rotations);
             scales.ToArray(ref o.scales);
+            leashes.ToArray(ref o.leashes);
             edgeParentToChildSplines.ToArray(ref o.edgeParentToChildSplines);
             edgeChildToParentSplines.ToArray(ref o.edgeChildToParentSplines);
+            edgeParentToChildSplinesLeashes.ToArray(ref o.edgeParentToChildSplinesLeashes);
+            edgeChildToParentSplinesLeashes.ToArray(ref o.edgeChildToParentSplinesLeashes);
             edgeLengths.ToArray(ref o.edgeLengths);
         }
 
@@ -229,8 +247,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.FromArray(i.positions, allocator);
             rotations.FromArray(i.rotations, allocator);
             scales.FromArray(i.scales, allocator);
+            leashes.FromArray(i.leashes, allocator);
             edgeParentToChildSplines.FromArray(i.edgeParentToChildSplines, allocator);
             edgeChildToParentSplines.FromArray(i.edgeChildToParentSplines, allocator);
+            edgeParentToChildSplinesLeashes.FromArray(i.edgeParentToChildSplinesLeashes, allocator);
+            edgeChildToParentSplinesLeashes.FromArray(i.edgeChildToParentSplinesLeashes, allocator);
             edgeLengths.FromArray(i.edgeLengths, allocator);
         }
 
@@ -239,12 +260,15 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.Ensure(capacityRequested, allocator);
             rotations.Ensure(capacityRequested, allocator);
             scales.Ensure(capacityRequested, allocator);
+            leashes.Ensure(capacityRequested, allocator);
         }
 
         public void EdgeEnsure(Int16 capacityRequested, Allocator allocator)
         {
             edgeParentToChildSplines.Ensure(capacityRequested, allocator);
             edgeChildToParentSplines.Ensure(capacityRequested, allocator);
+            edgeParentToChildSplinesLeashes.Ensure(capacityRequested, allocator);
+            edgeChildToParentSplinesLeashes.Ensure(capacityRequested, allocator);
             edgeLengths.Ensure(capacityRequested, allocator);
         }
 
@@ -255,6 +279,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             positions.Push(float3.zero, allocator);
             rotations.Push(quaternion.identity, allocator);
             scales.Push(new float2(1.0f, 1.0f), allocator);
+            leashes.Push(new float2(0.0f, 0.0f), allocator);
 
             return res;
         }
@@ -265,12 +290,13 @@ namespace Pastasfuture.SplineGraph.Runtime
             dst.positions.data[vertexDst] = src.positions.data[vertexSrc];
             dst.rotations.data[vertexDst] = src.rotations.data[vertexSrc];
             dst.scales.data[vertexDst] = src.scales.data[vertexSrc];
+            dst.leashes.data[vertexDst] = src.leashes.data[vertexSrc];
         }
 
         // Really, this is static.
         public void VertexSwap(ref SplineGraphPayload src, Int16 vertexSrc, ref SplineGraphPayload dst, Int16 vertexDst)
         {
-
+            // TODO:
         }
 
         public Int16 EdgePush(Allocator allocator)
@@ -279,6 +305,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             edgeParentToChildSplines.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
             edgeChildToParentSplines.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
+            edgeParentToChildSplinesLeashes.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
+            edgeChildToParentSplinesLeashes.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
             edgeLengths.Push(0.0f, allocator);
 
             return res;
@@ -319,8 +347,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplines.data[edgeIndex] = edgeParentToChildSpline;
             edgeLengths.data[edgeIndex] = edgeLength;
 
+            SplineMath.Spline edgeParentToChildSplineLeash = ComputeSplineLeashFromVerticesParentToChild(ref graph, vertexParent, vertexChild);
+            edgeParentToChildSplinesLeashes.data[edgeIndex] = edgeParentToChildSplineLeash;
+
             // Reversing a spline is much cheaper (just a swizzle) than ComputeSplineFromVertices.
             edgeChildToParentSplines.data[edgeIndex] = SplineMath.SplineFromReverse(edgeParentToChildSpline);
+            edgeChildToParentSplinesLeashes.data[edgeIndex] = SplineMath.SplineFromReverse(edgeParentToChildSplineLeash);
         }
 
         public SplineMath.Spline ComputeSplineFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexParent, Int16 vertexChild)
@@ -344,6 +376,29 @@ namespace Pastasfuture.SplineGraph.Runtime
             float3 v1 = math.mul(q1, new float3(0.0f, 0.0f, s1));
 
             return SplineMath.SplineFromHermite(p0, p1, v0, v1);
+        }
+
+        public SplineMath.Spline ComputeSplineLeashFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexParent, Int16 vertexChild)
+        {
+            Debug.Assert(vertexParent >= 0 && vertexParent < graph.vertices.count);
+            Debug.Assert(vertexChild >= 0 && vertexChild < graph.vertices.count);
+            Debug.Assert(graph.vertices.data[vertexParent].IsValid() == 1);
+            Debug.Assert(graph.vertices.data[vertexChild].IsValid() == 1);
+
+            float2 leash0 = leashes.data[vertexParent];
+            float2 leash1 = leashes.data[vertexChild];
+
+            float s0 = scales.data[vertexParent].y;
+            float s1 = scales.data[vertexChild].x;
+
+            // float2 leashB1 = leash0 + (1.0f / 3.0f) * math.abs(s0);
+            // float2 leashB2 = leash1 - (1.0f / 3.0f) * math.abs(s1);
+
+            // TODO: Figure out how to integrate scale (or if we want to).
+            float2 leashB1 = leash0 + math.lerp(leash0, leash1, 1.0f / 3.0f);
+            float2 leashB2 = leash1 - math.lerp(leash1, leash0, 1.0f / 3.0f);
+
+            return SplineMath.SplineFromBezier(new float3(leash0, 0.0f), new float3(leashB1, 0.0f), new float3(leashB2, 0.0f), new float3(leash1, 0.0f));
         }
     }
 

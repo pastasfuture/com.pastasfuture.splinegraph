@@ -12,13 +12,20 @@ namespace Pastasfuture.SplineGraph.Runtime
     public class SplineGraphFollowManager : MonoBehaviour
     {
         public SplineGraphManager splineGraphManager;
-        public GameObject followPrefab;
+        public GameObject[] followPrefabs;
         public int requestedCount = 32;
+        public int requestedCapacity = 32;
+        public float velocityMin = 0.25f;
+        public float velocityMax = 1.0f;
+        public bool isTwoWayPathEnabled = true;
+        public float leashNormalizedMin = 0.0f;
+        public float leashNormalizedMax = 1.0f;
         [System.NonSerialized] private FollowPool followPool = null; // Instantiate OnEnable()
-        private static readonly int INITIAL_CAPACITY = 8192;
         private int count = 0;
         [System.NonSerialized] private NativeArray<float3> positions;
         [System.NonSerialized] private NativeArray<quaternion> rotations;
+        [System.NonSerialized] private NativeArray<float> scales;
+        [System.NonSerialized] private NativeArray<float2> leashes;
         [System.NonSerialized] private NativeArray<SplineMath.SplineGraphFollowState> followStates;
         [System.NonSerialized] private NativeArray<Unity.Mathematics.Random> randoms;
         [System.NonSerialized] private NativeArray<float> velocities;
@@ -38,13 +45,13 @@ namespace Pastasfuture.SplineGraph.Runtime
             public List<FollowInstanceData> followInstanceData = new List<FollowInstanceData>();
             public int isActiveCount = 0;
 
-            public FollowPool(int capacity, GameObject prefab, Transform root)
+            public FollowPool(int capacity, GameObject[] prefabs, Transform root)
             {
                 isActiveCount = 0;
 
                 for (int i = 0, iLen = capacity; i < iLen; ++i)
                 {
-                    AllocateInstance(prefab, root);
+                    AllocateInstance(prefabs[i % prefabs.Length], root);
                 }
             }
 
@@ -72,13 +79,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 followInstanceData.Add(instance);
             }
 
-            public FollowInstanceData EnableInstance(GameObject prefab, Transform root)
+            public FollowInstanceData EnableInstanceNext()
             {
-                if (isActiveCount == followInstanceData.Count)
-                {
-                    AllocateInstance(prefab, root);
-                }
-
+                Debug.Assert(isActiveCount < followInstanceData.Count);
+                
                 FollowInstanceData instance = followInstanceData[isActiveCount++];
 
                 instance.gameObject.SetActive(true);
@@ -106,12 +110,12 @@ namespace Pastasfuture.SplineGraph.Runtime
         private void Start()
         {
             count = 0;
-            EnsureCapacity(SplineGraphFollowManager.INITIAL_CAPACITY, Allocator.Persistent);
+            EnsureCapacity(requestedCapacity, Allocator.Persistent);
         }
 
         void OnEnable()
         {
-            followPool = new FollowPool(SplineGraphFollowManager.INITIAL_CAPACITY, followPrefab, this.transform);
+            followPool = new FollowPool(requestedCapacity, followPrefabs, this.transform);
         }
 
         void OnDisable()
@@ -123,6 +127,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             if (positions != null && positions.Length > 0) { positions.Dispose(); }
             if (rotations != null && rotations.Length > 0) { rotations.Dispose(); }
+            if (scales != null && scales.Length > 0) { scales.Dispose(); }
+            if (leashes != null && leashes.Length > 0) { leashes.Dispose(); }
             if (followStates != null && followStates.Length > 0) { followStates.Dispose(); }
             if (randoms != null && randoms.Length > 0) { randoms.Dispose(); }
             if (velocities != null && velocities.Length > 0) { velocities.Dispose(); }
@@ -147,6 +153,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             positions = new NativeArray<float3>(capacity, allocator);
             rotations = new NativeArray<quaternion>(capacity, allocator);
+            scales = new NativeArray<float>(capacity, allocator);
+            leashes = new NativeArray<float2>(capacity, allocator);
             followStates = new NativeArray<SplineMath.SplineGraphFollowState>(capacity, allocator);
             randoms = new NativeArray<Unity.Mathematics.Random>(capacity, allocator);
             velocities = new NativeArray<float>(capacity, allocator);
@@ -168,6 +176,14 @@ namespace Pastasfuture.SplineGraph.Runtime
             quaternion rotationTemp = rotations[b];
             rotations[b] = rotations[a];
             rotations[a] = rotationTemp;
+
+            float scaleTemp = scales[b];
+            scales[b] = scales[a];
+            scales[a] = scaleTemp;
+
+            float2 leashTemp = leashes[b];
+            leashes[b] = leashes[a];
+            leashes[a] = leashTemp;
 
             SplineMath.SplineGraphFollowState followStateTemp = followStates[b];
             followStates[b] = followStates[a];
@@ -229,13 +245,18 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float t = UnityEngine.Random.value;
                 Int16 edgeIndex = (Int16)Mathf.FloorToInt((splineGraph.edgePoolChildren.data.Length - 1) * UnityEngine.Random.value + 0.5f );
                 int isComplete = 0;
-                int isReverse = 0;
+                int isReverse = isTwoWayPathEnabled ? ((UnityEngine.Random.value >= 0.5f) ? 1 : 0) : 0;
                 followStates[count] = new SplineMath.SplineGraphFollowState(t, edgeIndex, isComplete, isReverse);
 
-                randoms[count] = new Unity.Mathematics.Random(12381293);
-                velocities[count] = Mathf.Lerp(0.5f, 2.0f, UnityEngine.Random.value);
+                randoms[count] = new Unity.Mathematics.Random((uint)count + 1);
+                velocities[count] = Mathf.Lerp(velocityMin, velocityMax, UnityEngine.Random.value);
+                scales[count] = Mathf.Lerp(1.0f, 1.0f, UnityEngine.Random.value);
+                leashes[count] = new float2(
+                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(UnityEngine.Random.value, 2.0f)),
+                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(UnityEngine.Random.value, 2.0f))
+                );
 
-                followPool.EnableInstance(followPrefab, this.transform);
+                followPool.EnableInstanceNext();
             }
         }
 
@@ -266,11 +287,37 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 Int16 edgeIndex = followState.DecodeEdgeIndex();
                 SplineMath.Spline spline = (followState.DecodeIsReverse() == 0)
-                        ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
-                        : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
+                    ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
+                    : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
+
+                SplineMath.Spline splineLeash = (followState.DecodeIsReverse() == 0)
+                    ? splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndex]
+                    : splineGraph.payload.edgeChildToParentSplinesLeashes.data[edgeIndex];
+
+                Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
+                Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
+                if (followState.DecodeIsReverse() == 1)
+                {
+                    Int16 vertexIndexTemp = vertexIndexChild;
+                    vertexIndexChild = vertexIndexParent;
+                    vertexIndexParent = vertexIndexTemp;
+                }
+
+                quaternion rotationParent = splineGraph.payload.rotations.data[vertexIndexParent];
+                quaternion rotationChild = splineGraph.payload.rotations.data[vertexIndexChild];
+
 
                 positions[i] = SplineMath.EvaluatePositionFromT(spline, followState.t);
-                rotations[i] = SplineMath.EvaluateRotationFromT(spline, followState.t);
+                // rotations[i] = SplineMath.EvaluateRotationFromT(spline, followState.t);
+                // rotations[i] = math.slerp(rotationParent, rotationChild, followState.t);
+                rotations[i] = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, followState.t);
+
+
+
+                float2 leashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, followState.t).xy;
+                float2 leashOS = leashMaxOS * leashes[i];
+                float3 leashWS = math.mul(rotations[i], new float3(leashOS, 0.0f));
+                positions[i] += leashWS;
             }
         }
 
@@ -296,6 +343,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 followPool.followInstanceData[i].gameObject.transform.position = positions[i];
                 followPool.followInstanceData[i].gameObject.transform.rotation = rotations[i];
+                // followPool.followInstanceData[i].gameObject.transform.localScale = new float3(scales[i], scales[i], scales[i]);
             }
         }
     }

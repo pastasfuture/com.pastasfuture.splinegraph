@@ -80,7 +80,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDeserializationNeeded = true;
         }
 
-        public Int16 VertexAdd(float3 position, quaternion rotation, float2 scale)
+        public Int16 VertexAdd(float3 position, quaternion rotation, float2 scale, float2 leash)
         {
             Verify();
 
@@ -89,6 +89,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             splineGraph.payload.positions.data[vertexIndex] = position;
             splineGraph.payload.rotations.data[vertexIndex] = rotation;
             splineGraph.payload.scales.data[vertexIndex] = scale;
+            splineGraph.payload.leashes.data[vertexIndex] = leash;
 
             return vertexIndex;
         }
@@ -163,6 +164,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     float3 vertexPosition = splineGraph.payload.positions.data[v];
                     quaternion vertexRotation = splineGraph.payload.rotations.data[v];
+                    float2 vertexLeash = splineGraph.payload.leashes.data[v];
                     float handleSize = HandleUtility.GetHandleSize(vertexPosition);
                     const float HANDLE_DISPLAY_SIZE = 0.05f;
                     handleSize *= HANDLE_DISPLAY_SIZE;
@@ -188,6 +190,12 @@ namespace Pastasfuture.SplineGraph.Runtime
                     }
 
                     Handles.DotHandleCap(0, vertexPosition, vertexRotation, handleSize, EventType.Repaint);
+
+                    // Draw leash ellipse by scaling a circle handle.
+                    float4x4 leashLocalToWorldMatrix = float4x4.TRS(vertexPosition, vertexRotation, new float3(vertexLeash.x, vertexLeash.y, 1.0f));
+                    Handles.matrix = math.mul(splineGraphTransform.localToWorldMatrix, leashLocalToWorldMatrix);
+                    Handles.CircleHandleCap(0, float3.zero, quaternion.identity, 1.0f, EventType.Repaint);
+                    Handles.matrix = splineGraphTransform.localToWorldMatrix;
                 }
 
                 // Place vertex index above vertex position.
@@ -209,7 +217,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     // TODO: Perform adaptive tesselation of line.
                     SplineMath.Spline spline = splineGraph.payload.edgeParentToChildSplines.data[e];
                     float splineLength = splineGraph.payload.edgeLengths.data[e];
-                    const int SAMPLE_COUNT = 8;
+                    const int SAMPLE_COUNT = 16;
                     const float SAMPLE_COUNT_INVERSE = 1.0f / (float)SAMPLE_COUNT;
                     for (int s = 0; s < SAMPLE_COUNT; ++s)
                     {
@@ -312,8 +320,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float3 position = new float3(0.0f, 0.0f, 0.0f);
                 quaternion rotation = quaternion.identity;
                 float2 scale = new float2(1.0f, 1.0f);
+                float2 leash = new float2(0.0f, 0.0f);
 
-                Int16 vertexIndex = sgc.VertexAdd(position, rotation, scale);
+                Int16 vertexIndex = sgc.VertexAdd(position, rotation, scale, leash);
 
                 // If vertices are selected, make them the parents of the new vertex.
                 if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 0))
@@ -473,6 +482,16 @@ namespace Pastasfuture.SplineGraph.Runtime
                     sgc.splineGraph.VertexComputePayloads(v);
                 }
 
+                float2 leash = sgc.splineGraph.payload.leashes.data[v];
+                float2 leashNew = EditorGUILayout.Vector2Field("Leash", leash);
+                if (math.any(leashNew != leash))
+                {
+                    sgc.UndoRecord("Edited Spline Graph Vertex Leash");
+
+                    sgc.splineGraph.payload.leashes.data[v] = leashNew;
+                    sgc.splineGraph.VertexComputePayloads(v);
+                }
+
                 EditorStyles.label.normal.textColor = styleTextColorPrevious;
                 
                 EditorGUILayout.EndVertical();
@@ -487,11 +506,12 @@ namespace Pastasfuture.SplineGraph.Runtime
                     float3 positionParent = sgc.splineGraph.payload.positions.data[indexAdd];
                     quaternion rotationParent = sgc.splineGraph.payload.rotations.data[indexAdd];
                     float2 scaleParent = sgc.splineGraph.payload.scales.data[indexAdd];
+                    float2 leashParent = sgc.splineGraph.payload.leashes.data[indexAdd];
 
                     // TODO: Compute average parent position and use negation of that for offset.
                     float3 positionOffset = new float3(0.0f, 0.0f, 1.0f);
 
-                    Int16 vertexChild = sgc.VertexAdd(positionParent + positionOffset, rotationParent, scaleParent);
+                    Int16 vertexChild = sgc.VertexAdd(positionParent + positionOffset, rotationParent, scaleParent, leashParent);
                     sgc.EdgeAdd(indexAdd, vertexChild);
 
                     // Select point after adding for convenience, as typical use is add point, move, add point, move, etc.
@@ -597,6 +617,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 quaternion rotationOffsetOS = quaternion.identity;
                 float3 rotationOffsetOriginOS = new float3(0.0f, 0.0f, 0.0f);
                 float2 scaleOffsetOS = new float2(1.0f, 1.0f);
+                float2 leashOffsetOS = new float2(0.0f, 0.0f);
                 for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
                 {
                     Int16 selectedVertexIndex = selectedIndices[i];
@@ -604,6 +625,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
                     quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
                     float2 vertexScaleOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
+                    float2 vertexLeashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
                     vertexRotationOS = math.mul(rotation, vertexRotationOS);
 
                     vertexPositionOS = transform.TransformPoint(vertexPositionOS);
@@ -637,18 +659,39 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                     else if (Tools.current == Tool.Scale)
                     {
-                        float handleSize = HandleUtility.GetHandleSize(vertexPositionOS) * 1.0f;
-                        float scaleNewOSX = Handles.ScaleSlider(vertexScaleOS.x, vertexPositionOS, math.mul(vertexRotationOS, new float3(0.0f, 0.0f, -1.0f)), vertexRotationOS, handleSize, 1e-5f);
-                        float scaleNewOSY = Handles.ScaleSlider(vertexScaleOS.y, vertexPositionOS, math.mul(vertexRotationOS, new float3(0.0f, 0.0f, 1.0f)), vertexRotationOS, handleSize, 1e-5f);
-                        float2 scaleNewOS = new float2(scaleNewOSX, scaleNewOSY);
-                        if (math.any(scaleNewOS != vertexScaleOS))
+                        bool isDone = false;
                         {
-                            scaleOffsetOS.x = (math.abs(vertexScaleOS.x) < 1e-5f) ? 1.0f : (scaleNewOSX / vertexScaleOS.x);
-                            scaleOffsetOS.y = (math.abs(vertexScaleOS.y) < 1e-5f) ? 1.0f : (scaleNewOSY / vertexScaleOS.y);
+                            float handleSize = HandleUtility.GetHandleSize(vertexPositionOS) * 1.0f;
+                            float scaleNewOSX = Handles.ScaleSlider(vertexScaleOS.x, vertexPositionOS, math.mul(vertexRotationOS, new float3(0.0f, 0.0f, -1.0f)), vertexRotationOS, handleSize, 1e-5f);
+                            float scaleNewOSY = Handles.ScaleSlider(vertexScaleOS.y, vertexPositionOS, math.mul(vertexRotationOS, new float3(0.0f, 0.0f, 1.0f)), vertexRotationOS, handleSize, 1e-5f);
+                            float2 scaleNewOS = new float2(scaleNewOSX, scaleNewOSY);
 
-                            // Under multi-selection, scaleOffsetOS will be the same for all points being transformed.
-                            break;
+                            if (math.any(scaleNewOS != vertexScaleOS))
+                            {
+                                scaleOffsetOS.x = (math.abs(vertexScaleOS.x) < 1e-5f) ? 1.0f : (scaleNewOSX / vertexScaleOS.x);
+                                scaleOffsetOS.y = (math.abs(vertexScaleOS.y) < 1e-5f) ? 1.0f : (scaleNewOSY / vertexScaleOS.y);
+
+                                // Under multi-selection, scaleOffsetOS will be the same for all points being transformed.
+                                isDone = true;
+                            }
                         }
+
+                        {
+                            float handleSize = HandleUtility.GetHandleSize(vertexPositionOS) * 1.0f;
+                            float leashNewOSX = Handles.ScaleSlider(vertexLeashOS.x, vertexPositionOS, math.mul(vertexRotationOS, new float3(1.0f, 0.0f, 0.0f)), vertexRotationOS, handleSize, 1e-5f);
+                            float leashNewOSY = Handles.ScaleSlider(vertexLeashOS.y, vertexPositionOS, math.mul(vertexRotationOS, new float3(0.0f, 1.0f, 0.0f)), vertexRotationOS, handleSize, 1e-5f);
+                            float2 leashNewOS = new float2(leashNewOSX, leashNewOSY);
+
+                            if (math.any(leashNewOS != vertexLeashOS))
+                            {
+                                leashOffsetOS = new float2(leashNewOSX, leashNewOSY) - vertexLeashOS;
+
+                                // Under multi-selection, leashOffsetOS will be the same for all points being transformed.
+                                isDone = true;
+                            }
+                        }
+
+                        if (isDone) { break; }
                     }
                 }
 
@@ -706,6 +749,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                             float2 vertexScaleOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
                             vertexScaleOS *= scaleOffsetOS;
                             sgc.splineGraph.payload.scales.data[selectedVertexIndex] = vertexScaleOS;
+
+                            float2 vertexLeashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
+                            vertexLeashOS = math.max(0.0f, vertexLeashOS + leashOffsetOS);
+                            sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = vertexLeashOS;
                         }
 
                         for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
