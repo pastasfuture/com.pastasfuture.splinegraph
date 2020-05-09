@@ -15,6 +15,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public GameObject[] followPrefabs;
         public int requestedCount = 32;
         public int requestedCapacity = 32;
+        public int batchSize = 128;
         public float velocityMin = 0.25f;
         public float velocityMax = 1.0f;
         public bool isTwoWayPathEnabled = true;
@@ -229,14 +230,14 @@ namespace Pastasfuture.SplineGraph.Runtime
             NativeArray<float3> splineBounds = splineGraphManager.GetSplineBounds(Allocator.Persistent);
 
             EnsureCapacity(requestedCount, Allocator.Persistent);
-            Spawn(Time.deltaTime, ref splineGraph, ref splineBounds);
-            Follow(Time.deltaTime, ref splineGraph, ref splineBounds);
+            Spawn(Time.deltaTime, ref splineGraph);
+            Follow(Time.deltaTime, ref splineGraph);
             Despawn();
             Present();
         }
 
         //
-        void Spawn(float deltaTime, ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph, ref NativeArray<float3> splineBounds)
+        void Spawn(float deltaTime, ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph)
         {
             if (count >= requestedCount) { return; }
 
@@ -248,12 +249,13 @@ namespace Pastasfuture.SplineGraph.Runtime
                 int isReverse = isTwoWayPathEnabled ? ((UnityEngine.Random.value >= 0.5f) ? 1 : 0) : 0;
                 followStates[count] = new SplineMath.SplineGraphFollowState(t, edgeIndex, isComplete, isReverse);
 
+                float velocityRandom = UnityEngine.Random.value;
                 randoms[count] = new Unity.Mathematics.Random((uint)count + 1);
-                velocities[count] = Mathf.Lerp(velocityMin, velocityMax, UnityEngine.Random.value);
+                velocities[count] = Mathf.Lerp(velocityMin, velocityMax, velocityRandom);
                 scales[count] = Mathf.Lerp(1.0f, 1.0f, UnityEngine.Random.value);
                 leashes[count] = new float2(
-                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(UnityEngine.Random.value, 2.0f)),
-                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(UnityEngine.Random.value, 2.0f))
+                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(1.0f - velocityRandom, 2.0f)),
+                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(1.0f - velocityRandom, 2.0f))
                 );
 
                 followPool.EnableInstanceNext();
@@ -261,9 +263,52 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         // Can be trivially parallelized.
-        void Follow(float deltaTime, ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph, ref NativeArray<float3> splineBounds)
+        void Follow(float deltaTime, ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph)
         {
-            for (int i = 0; i < count; ++i)
+            JobHandle splineGraphFollowJobHandle = QueueSplineGraphFollowJob(ref splineGraph, deltaTime);
+            splineGraphFollowJobHandle.Complete();
+        }
+
+        private JobHandle QueueSplineGraphFollowJob(
+            ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph,
+            float deltaTime
+        )
+        {
+            SplineGraphFollowJob splineGraphFollowJob = new SplineGraphFollowJob()
+            {
+                deltaTime = deltaTime,
+                velocities = velocities,
+                randoms = randoms,
+                leashes = leashes,
+                splineGraph = splineGraph,
+                positions = positions,
+                rotations = rotations,
+                followStates = followStates
+            };
+
+            // TODO: Determine optimal batch size.
+            Debug.Assert(batchSize > 0);
+            return splineGraphFollowJob.Schedule(count, batchSize);
+        }
+
+        [BurstCompile]
+        public struct SplineGraphFollowJob : IJobParallelFor
+        {
+            [ReadOnly]
+            public float deltaTime;
+            [ReadOnly]
+            public NativeArray<float> velocities;
+            [ReadOnly]
+            public NativeArray<float2> leashes;
+            [ReadOnly]
+            public DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph;
+
+            public NativeArray<float3> positions;
+            public NativeArray<quaternion> rotations;
+            public NativeArray<Unity.Mathematics.Random> randoms;
+            public NativeArray<SplineMath.SplineGraphFollowState> followStates;
+
+            public void Execute(int i)
             {
                 float positionDelta = math.length(velocities[i]) * deltaTime;
 
