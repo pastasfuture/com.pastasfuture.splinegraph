@@ -21,6 +21,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public bool isTwoWayPathEnabled = true;
         public float leashNormalizedMin = 0.0f;
         public float leashNormalizedMax = 1.0f;
+        public float rollFromAccelerationScale = 0.01f;
         [System.NonSerialized] private FollowPool followPool = null; // Instantiate OnEnable()
         private int count = 0;
         [System.NonSerialized] private NativeArray<float3> positions;
@@ -253,10 +254,19 @@ namespace Pastasfuture.SplineGraph.Runtime
                 randoms[count] = new Unity.Mathematics.Random((uint)count + 1);
                 velocities[count] = Mathf.Lerp(velocityMin, velocityMax, velocityRandom);
                 scales[count] = Mathf.Lerp(1.0f, 1.0f, UnityEngine.Random.value);
-                leashes[count] = new float2(
-                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(1.0f - velocityRandom, 2.0f)),
-                    Mathf.Lerp(leashNormalizedMin, leashNormalizedMax, math.pow(1.0f - velocityRandom, 2.0f))
-                );
+
+                float leashPolarRadiusNormalized = math.lerp(leashNormalizedMin, leashNormalizedMax, math.pow(1.0f - velocityRandom, 2.0f));
+
+                float leashPolarThetaMin = isTwoWayPathEnabled ? (-0.5f * math.PI) : 0.0f;
+                float leashPolarThetaMax = isTwoWayPathEnabled ? (0.5f * math.PI) : math.PI * 2.0f;
+                float leashPolarTheta = math.lerp(leashPolarThetaMin, leashPolarThetaMax, UnityEngine.Random.value);
+
+                float2 leashCartesianNormalized = new float2(
+                    math.cos(leashPolarTheta),
+                    math.sin(leashPolarTheta)
+                ) * leashPolarRadiusNormalized;
+
+                leashes[count] = leashCartesianNormalized;
 
                 followPool.EnableInstanceNext();
             }
@@ -277,6 +287,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             SplineGraphFollowJob splineGraphFollowJob = new SplineGraphFollowJob()
             {
                 deltaTime = deltaTime,
+                rollFromAccelerationScale = rollFromAccelerationScale,
                 velocities = velocities,
                 randoms = randoms,
                 leashes = leashes,
@@ -296,6 +307,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             [ReadOnly]
             public float deltaTime;
+            [ReadOnly]
+            public float rollFromAccelerationScale;
             [ReadOnly]
             public NativeArray<float> velocities;
             [ReadOnly]
@@ -335,10 +348,6 @@ namespace Pastasfuture.SplineGraph.Runtime
                     ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
                     : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
 
-                SplineMath.Spline splineLeash = (followState.DecodeIsReverse() == 0)
-                    ? splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndex]
-                    : splineGraph.payload.edgeChildToParentSplinesLeashes.data[edgeIndex];
-
                 Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
                 Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
                 if (followState.DecodeIsReverse() == 1)
@@ -357,12 +366,31 @@ namespace Pastasfuture.SplineGraph.Runtime
                 // rotations[i] = math.slerp(rotationParent, rotationChild, followState.t);
                 rotations[i] = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, followState.t);
 
+                // For now, simply evaluate the current leash value by lerping between the parent and child leash values, rather than using spline interpolation.
+                // This seems good enough for now (there is a bug in the spline interpolation code commented out below.)
+                float2 leashParent = splineGraph.payload.leashes.data[vertexIndexParent];
+                float2 leashChild = splineGraph.payload.leashes.data[vertexIndexChild];
+                float2 leashMaxOS = math.lerp(leashParent, leashChild, followState.t);
 
+                // SplineMath.Spline splineLeash = (followState.DecodeIsReverse() == 0)
+                //     ? splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndex]
+                //     : splineGraph.payload.edgeChildToParentSplinesLeashes.data[edgeIndex];
+                // float2 leashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, followState.t).xy;
 
-                float2 leashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, followState.t).xy;
                 float2 leashOS = leashMaxOS * leashes[i];
                 float3 leashWS = math.mul(rotations[i], new float3(leashOS, 0.0f));
                 positions[i] += leashWS;
+
+                // {
+                //     float3 acceleration = SplineMath.EvaluateAccelerationFromT(spline, followState.t);
+
+                //     float3 directionRightWS = math.mul(rotations[i], new float3(1.0f, 0.0f, 0.0f));
+                //     float accelerationRight = math.dot(directionRightWS, acceleration);
+
+                //     float rollAngle = math.lerp(-0.25f * math.PI, 0.25f * math.PI, math.saturate((accelerationRight * rollFromAccelerationScale) * -0.5f + 0.5f));
+                //     rotations[i] = math.mul(rotations[i], quaternion.AxisAngle(new float3(0.0f, 0.0f, 1.0f), rollAngle));
+                // }
+                
             }
         }
 
