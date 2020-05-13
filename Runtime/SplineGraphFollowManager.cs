@@ -11,6 +11,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 {
     public class SplineGraphFollowManager : MonoBehaviour
     {
+        public Transform avoidanceSoftBodySphereTransform;
+        public float avoidanceSoftBodySphereRadius;
         public SplineGraphManager splineGraphManager;
         public GameObject[] followPrefabs;
         public int requestedCount = 32;
@@ -287,6 +289,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             SplineGraphFollowJob splineGraphFollowJob = new SplineGraphFollowJob()
             {
                 deltaTime = deltaTime,
+                avoidanceSoftBodySphereOrigin = (avoidanceSoftBodySphereTransform != null) ? (float3)avoidanceSoftBodySphereTransform.position : float3.zero,
+                avoidanceSoftBodySphereRadius = (avoidanceSoftBodySphereTransform != null) ? avoidanceSoftBodySphereRadius : 0.0f,
                 rollFromAccelerationScale = rollFromAccelerationScale,
                 velocities = velocities,
                 randoms = randoms,
@@ -307,6 +311,10 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             [ReadOnly]
             public float deltaTime;
+            [ReadOnly]
+            public float3 avoidanceSoftBodySphereOrigin;
+            [ReadOnly]
+            public float avoidanceSoftBodySphereRadius; 
             [ReadOnly]
             public float rollFromAccelerationScale;
             [ReadOnly]
@@ -360,8 +368,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                 quaternion rotationParent = splineGraph.payload.rotations.data[vertexIndexParent];
                 quaternion rotationChild = splineGraph.payload.rotations.data[vertexIndexChild];
 
-
-                positions[i] = SplineMath.EvaluatePositionFromT(spline, followState.t);
+                float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, followState.t);
+                positions[i] = positionOnSpline;
                 // rotations[i] = SplineMath.EvaluateRotationFromT(spline, followState.t);
                 // rotations[i] = math.slerp(rotationParent, rotationChild, followState.t);
                 rotations[i] = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, followState.t);
@@ -380,6 +388,28 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float2 leashOS = leashMaxOS * leashes[i];
                 float3 leashWS = math.mul(rotations[i], new float3(leashOS, 0.0f));
                 positions[i] += leashWS;
+
+                if (avoidanceSoftBodySphereRadius > 1e-5f)
+                {
+                    float3 avoidanceDirection = positions[i] - avoidanceSoftBodySphereOrigin;
+                    float avoidanceLength = math.length(avoidanceDirection);
+                    avoidanceDirection *= (avoidanceLength > 1e-5f) ? (1.0f / avoidanceLength) : 0.0f;
+                    float avoidanceOffset = math.saturate((avoidanceLength / avoidanceSoftBodySphereRadius) * -0.5f + 1.0f) * avoidanceSoftBodySphereRadius;
+                    if (avoidanceOffset > 0.0f)
+                    {
+                        float3 leashPlaneNormal = math.mul(rotations[i], new float3(0.0f, 0.0f, 1.0f));
+                        float3 avoidanceDirectionLeashPlaneT = avoidanceDirection - leashPlaneNormal * math.dot(leashPlaneNormal, avoidanceDirection);
+                        avoidanceDirectionLeashPlaneT = (math.lengthsq(avoidanceDirectionLeashPlaneT) > 1e-3f)
+                            ? avoidanceDirectionLeashPlaneT
+                            : leashWS;
+                        avoidanceDirectionLeashPlaneT = (math.lengthsq(avoidanceDirectionLeashPlaneT) > 1e-3f)
+                            ? avoidanceDirectionLeashPlaneT
+                            : new float3(0.0f, 1.0f, 0.0f);
+                        avoidanceDirectionLeashPlaneT = math.normalize(avoidanceDirectionLeashPlaneT);
+                        positions[i] += avoidanceDirectionLeashPlaneT * avoidanceOffset;
+                    }
+                }
+
 
                 // {
                 //     float3 acceleration = SplineMath.EvaluateAccelerationFromT(spline, followState.t);
