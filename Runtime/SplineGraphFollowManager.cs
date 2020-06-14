@@ -15,6 +15,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         public float avoidanceSoftBodySphereRadius;
         public SplineGraphManager splineGraphManager;
         public GameObject[] followPrefabs;
+        public float dampeningPosition = 0.0f;
+        public float dampeningRotation = 0.0f;
         public int requestedCount = 32;
         public int requestedCapacity = 32;
         public int batchSize = 128;
@@ -247,7 +249,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (; count < requestedCount; ++count)
             {
                 float t = UnityEngine.Random.value;
-                Int16 edgeIndex = (Int16)Mathf.FloorToInt((splineGraph.edgePoolChildren.data.Length - 1) * UnityEngine.Random.value + 0.5f );
+                Int16 edgeIndex = (Int16)Mathf.FloorToInt((splineGraph.edgePoolChildren.data.Length - 1) * UnityEngine.Random.value + 0.5f);
                 int isComplete = 0;
                 int isReverse = isTwoWayPathEnabled ? ((UnityEngine.Random.value >= 0.5f) ? 1 : 0) : 0;
                 followStates[count] = new SplineMath.SplineGraphFollowState(t, edgeIndex, isComplete, isReverse);
@@ -270,6 +272,30 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 leashes[count] = leashCartesianNormalized;
 
+                // Seed position and rotation with their initial values, so that dampening does not lerp between the previous garbage position of a newly spawned vehicle.
+                // If this probes to make Spawn() significantly more expensive, we can store a flag that says whether or not we should apply dampening instead.
+                {
+                    SplineMath.Spline spline = (isReverse == 0)
+                        ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
+                        : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
+
+                    Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
+                    Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
+                    if (isReverse == 1)
+                    {
+                        Int16 vertexIndexTemp = vertexIndexChild;
+                        vertexIndexChild = vertexIndexParent;
+                        vertexIndexParent = vertexIndexTemp;
+                    }
+
+                    quaternion rotationParent = splineGraph.payload.rotations.data[vertexIndexParent];
+                    quaternion rotationChild = splineGraph.payload.rotations.data[vertexIndexChild];
+
+                    float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, t);
+                    positions[count] = positionOnSpline;
+                    rotations[count] = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, t);
+                }
+
                 followPool.EnableInstanceNext();
             }
         }
@@ -289,6 +315,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             SplineGraphFollowJob splineGraphFollowJob = new SplineGraphFollowJob()
             {
                 deltaTime = deltaTime,
+                dampeningPosition = dampeningPosition,
+                dampeningRotation = dampeningRotation,
                 avoidanceSoftBodySphereOrigin = (avoidanceSoftBodySphereTransform != null) ? (float3)avoidanceSoftBodySphereTransform.position : float3.zero,
                 avoidanceSoftBodySphereRadius = (avoidanceSoftBodySphereTransform != null) ? avoidanceSoftBodySphereRadius : 0.0f,
                 rollFromAccelerationScale = rollFromAccelerationScale,
@@ -309,6 +337,10 @@ namespace Pastasfuture.SplineGraph.Runtime
         [BurstCompile]
         public struct SplineGraphFollowJob : IJobParallelFor
         {
+            [ReadOnly]
+            public float dampeningPosition;
+            [ReadOnly]
+            public float dampeningRotation;
             [ReadOnly]
             public float deltaTime;
             [ReadOnly]
@@ -368,6 +400,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                 quaternion rotationParent = splineGraph.payload.rotations.data[vertexIndexParent];
                 quaternion rotationChild = splineGraph.payload.rotations.data[vertexIndexChild];
 
+                float3 positionPrevious = positions[i];
+                quaternion rotationPrevious = rotations[i];
+
                 float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, followState.t);
                 positions[i] = positionOnSpline;
                 // rotations[i] = SplineMath.EvaluateRotationFromT(spline, followState.t);
@@ -409,6 +444,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                         positions[i] += avoidanceDirectionLeashPlaneT * avoidanceOffset;
                     }
                 }
+
+                positions[i] = math.lerp(positions[i], positionPrevious, dampeningPosition);
+                rotations[i] = math.slerp(rotations[i], rotationPrevious, dampeningRotation);
 
 
                 // {
