@@ -18,7 +18,6 @@ namespace Pastasfuture.SplineGraph.Runtime
         public int type = 0;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
-        [System.NonSerialized] public NativeArray<float3> splineBounds; // TODO: Remove.
 
         private bool isDeserializationNeeded = true;
         [System.NonSerialized] public bool isDirty = true;
@@ -38,37 +37,22 @@ namespace Pastasfuture.SplineGraph.Runtime
             return splineGraph;
         }
 
-        public NativeArray<float3> GetSplineBounds(Allocator allocator)
-        {
-            Verify();
-
-            // TODO: For now we are just lazily constructing splineBounds.
-            // This creates a big spike on first call, and assumes splineGraph doesn't change after first call.
-            // What we should do is fold splineBounds into our splineGraph data structure and compute at edit time.
-            if (splineBounds.Length != (splineGraph.payload.edgeParentToChildSplines.count * 2))
-            {
-                splineBounds = new NativeArray<float3>(splineGraph.payload.edgeParentToChildSplines.count * 2, allocator);
-
-                for (Int16 i = 0, iCount = (Int16)splineGraph.payload.edgeParentToChildSplines.count; i < iCount; ++i)
-                {
-                    SplineMath.Spline spline = splineGraph.payload.edgeParentToChildSplines.data[i];
-
-                    SplineMath.ComputeSplineBounds(out float3 aabbMin, out float3 aabbMax, spline);
-
-                    splineBounds[i * 2 + 0] = aabbMin;
-                    splineBounds[i * 2 + 1] = aabbMax;
-                }
-            }
-
-            return splineBounds;
-        }
-
         void OnEnable()
         {
+            Verify();
         }
 
         void OnDisable()
         {
+            Verify();
+
+            // Need to Dispose() inside of OnDisable(), because OnDestroy() is not called on domain reloads.
+            // Only calling Dispose() inside of OnDestroy() would cause memory leaks between domain reloads.
+            // This downside of calling Dispose() here is that enabling / disabling this component will trigger
+            // (native) memory allocations.
+            // We need to be mindful of this, and not enable / disable SplineGraphManager often.
+            // In practice, we should only trigger this on level loads.
+            Dispose();
         }
 
         void OnDestroy()
@@ -78,9 +62,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         void Dispose()
         {
-            // TODO:
             splineGraph.Dispose();
-            if (splineBounds.Length > 0) { splineBounds.Dispose(); }
         }
 
         public void Verify()

@@ -166,6 +166,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public SplineMath.Spline[] edgeParentToChildSplinesLeashes;
         public SplineMath.Spline[] edgeChildToParentSplinesLeashes;
         public float[] edgeLengths;
+        public float3[] edgeBounds;
     }
 
     public struct SplineGraphPayload : IDirectedGraphPayload<SplineGraphPayload, SplineGraphPayloadSerializable>
@@ -182,6 +183,9 @@ namespace Pastasfuture.SplineGraph.Runtime
         public NativeArrayDynamic<SplineMath.Spline> edgeChildToParentSplinesLeashes;
 
         public NativeArrayDynamic<float> edgeLengths;
+        public NativeArrayDynamic<float3> edgeBounds;
+
+        public static readonly int EDGE_BOUNDS_STRIDE = 2;
 
         public void Create(out SplineGraphPayload res, Allocator allocator)
         {
@@ -196,6 +200,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             res.edgeParentToChildSplinesLeashes = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
             res.edgeChildToParentSplinesLeashes = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
             res.edgeLengths = new NativeArrayDynamic<float>(1, allocator);
+            res.edgeBounds = new NativeArrayDynamic<float3>(1 * EDGE_BOUNDS_STRIDE, allocator);
         }
 
         public void Dispose()
@@ -209,6 +214,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.Dispose();
             edgeChildToParentSplinesLeashes.Dispose();
             edgeLengths.Dispose();
+            edgeBounds.Dispose();
         }
 
         public void Clear()
@@ -222,6 +228,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.Clear();
             edgeChildToParentSplinesLeashes.Clear();
             edgeLengths.Clear();
+            edgeBounds.Clear();
         }
 
         public void Serialize(ref SplineGraphPayloadSerializable o)
@@ -238,6 +245,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.ToArray(ref o.edgeParentToChildSplinesLeashes);
             edgeChildToParentSplinesLeashes.ToArray(ref o.edgeChildToParentSplinesLeashes);
             edgeLengths.ToArray(ref o.edgeLengths);
+            edgeBounds.ToArray(ref o.edgeBounds);
         }
 
         public void Deserialize(ref SplineGraphPayloadSerializable i, Allocator allocator)
@@ -253,6 +261,30 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.FromArray(i.edgeParentToChildSplinesLeashes, allocator);
             edgeChildToParentSplinesLeashes.FromArray(i.edgeChildToParentSplinesLeashes, allocator);
             edgeLengths.FromArray(i.edgeLengths, allocator);
+
+            int edgeBoundsCountRequested = i.edgeLengths.Length * EDGE_BOUNDS_STRIDE;
+            if ((i.edgeBounds == null) || (i.edgeBounds.Length != edgeBoundsCountRequested))
+            {
+                // Encountered old spline data that was authored before we introduced edgeBounds.
+                // Need to generate data here.
+                // TODO: In the future, we should add some version tracking and standardized migration system.
+                edgeBounds.Ensure(i.edgeLengths.Length * EDGE_BOUNDS_STRIDE, allocator);
+                edgeBounds.count = edgeBoundsCountRequested;
+
+                for (Int16 edgeIndex = 0, edgeCount = (Int16)i.edgeParentToChildSplines.Length; edgeIndex < edgeCount; ++ edgeIndex)
+                {
+                    SplineMath.Spline edgeParentToChildSpline = edgeParentToChildSplines.data[edgeIndex];
+
+                    SplineMath.ComputeSplineBounds(out float3 aabbMin, out float3 aabbMax, edgeParentToChildSpline);
+                    edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 0] = aabbMin;
+                    edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 1] = aabbMax;
+                }
+            }
+            else
+            {
+                edgeBounds.FromArray(i.edgeBounds, allocator);
+            }
+            
         }
 
         public void VertexEnsure(Int16 capacityRequested, Allocator allocator)
@@ -270,6 +302,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.Ensure(capacityRequested, allocator);
             edgeChildToParentSplinesLeashes.Ensure(capacityRequested, allocator);
             edgeLengths.Ensure(capacityRequested, allocator);
+            edgeBounds.Ensure(capacityRequested * EDGE_BOUNDS_STRIDE, allocator);
         }
 
         public Int16 VertexPush(Allocator allocator)
@@ -308,6 +341,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeParentToChildSplinesLeashes.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
             edgeChildToParentSplinesLeashes.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
             edgeLengths.Push(0.0f, allocator);
+            edgeBounds.Push(float3.zero, allocator); edgeBounds.Push(float3.zero, allocator);
 
             return res;
         }
@@ -346,6 +380,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             float edgeLength = SplineMath.ComputeLengthEstimate(edgeParentToChildSpline, 1e-5f);
             edgeParentToChildSplines.data[edgeIndex] = edgeParentToChildSpline;
             edgeLengths.data[edgeIndex] = edgeLength;
+
+            SplineMath.ComputeSplineBounds(out float3 aabbMin, out float3 aabbMax, edgeParentToChildSpline);
+            edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 0] = aabbMin;
+            edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 1] = aabbMax;
 
             SplineMath.Spline edgeParentToChildSplineLeash = ComputeSplineLeashFromVerticesParentToChild(ref graph, vertexParent, vertexChild);
             edgeParentToChildSplinesLeashes.data[edgeIndex] = edgeParentToChildSplineLeash;

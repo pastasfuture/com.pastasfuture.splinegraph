@@ -34,11 +34,23 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             // DirectedGraph<SplineGraphPayload>.DebugRunTests();
             instances.Add(this);
+
+            Verify();
         }
 
         void OnDisable()
         {
             instances.Remove(this);
+
+            Verify();
+
+            // Need to Dispose() inside of OnDisable(), because OnDestroy() is not called on domain reloads.
+            // Only calling Dispose() inside of OnDestroy() would cause memory leaks between domain reloads.
+            // This downside of calling Dispose() here is that enabling / disabling this component will trigger
+            // (native) memory allocations.
+            // Luckily, SplineGraphComponent is designed only really for editing.
+            // SplineGraphManager is what is used during runtime, so this allocation is not a concern in practice.
+            Dispose();
         }
 
         void OnDestroy()

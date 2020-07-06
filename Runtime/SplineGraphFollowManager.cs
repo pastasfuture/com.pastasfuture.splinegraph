@@ -232,8 +232,6 @@ namespace Pastasfuture.SplineGraph.Runtime
                 return;
             }
 
-            NativeArray<float3> splineBounds = splineGraphManager.GetSplineBounds(Allocator.Persistent);
-
             EnsureCapacity(requestedCount, Allocator.Persistent);
             Spawn(Time.deltaTime, ref splineGraph);
             Follow(Time.deltaTime, ref splineGraph);
