@@ -21,6 +21,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         private bool isDeserializationNeeded = true;
         [System.NonSerialized] public bool isDirty = true;
+        [System.NonSerialized] public int lastDirtyTimestamp = 0; // Do not need actual time, just a counter.
 
         [System.NonSerialized] public bool debugIsSpawnEnabled = false;
         [System.NonSerialized] public float3 debugPosition;
@@ -99,6 +100,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             Undo.RecordObject(this, message);
             this.isDirty = true;
+            ++this.lastDirtyTimestamp;
         }
         #endif
 

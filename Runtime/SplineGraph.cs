@@ -527,6 +527,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgePoolChildren.FromArray(ig.edgePoolChildren, allocator);
         }
 
+        public Int16 ComputeVertexIsValidCount()
+        {
+            return (Int16)(vertices.count - verticesFreeHoleCount);
+        }
+
+        public Int16 ComputeEdgeIsValidCount()
+        {
+            return (Int16)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
+        }
+
         public Int16 VertexAdd(Allocator allocator)
         {
             Int16 res = (Int16)vertices.count;

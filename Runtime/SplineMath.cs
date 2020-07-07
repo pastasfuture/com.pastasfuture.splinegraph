@@ -433,6 +433,33 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         [BurstCompile]
+        public static void ComputeSplitAtT(out Spline s0, out Spline s1, Spline s, float t)
+        {
+            ComputeSplitComponentAtT(out s0.xb, out s1.xb, s.xb, t);
+            ComputeSplitComponentAtT(out s0.yb, out s1.yb, s.yb, t);
+            ComputeSplitComponentAtT(out s0.zb, out s1.zb, s.zb, t);
+        }
+
+        [BurstCompile]
+        private static void ComputeSplitComponentAtT(out float4 splineComponent0, out float4 splineComponent1, float4 splineComponent, float t)
+        {
+            float q0 = (splineComponent.x + splineComponent.y) * t;
+            float q1 = (splineComponent.y + splineComponent.z) * t;
+            float q2 = (splineComponent.z + splineComponent.w) * t;
+
+            float r0 = (q0 + q1) * t; // x + 2y + z / 4
+            float r1 = (q1 + q2) * t; // y + 2z + w / 4
+
+            float s0 = (r0 + r1) * t; // q0 + 2q1 + q2 / 4 = x+y + 2(y+z) + z+w / 8 = x + 3y + 3z + w
+
+            float sx = splineComponent.x; // support aliasing
+            float sw = splineComponent.w;
+
+            splineComponent0 = new float4(sx, q0, r0, s0);
+            splineComponent1 = new float4(s0, r1, q2, sw);
+        }
+
+        [BurstCompile]
         public static quaternion EvaluateRotationFromT(Spline spline, float t)
         {
             float3 splineVelocity = SplineMath.EvaluateVelocityFromT(spline, t);
