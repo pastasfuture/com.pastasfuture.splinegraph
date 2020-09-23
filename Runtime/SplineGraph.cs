@@ -426,15 +426,25 @@ namespace Pastasfuture.SplineGraph.Runtime
             float2 leash0 = leashes.data[vertexParent];
             float2 leash1 = leashes.data[vertexChild];
 
-            float s0 = scales.data[vertexParent].y;
-            float s1 = scales.data[vertexChild].x;
+            // float s0 = scales.data[vertexParent].y;
+            // float s1 = scales.data[vertexChild].x;
+
+            // float weightTotal = math.abs(s0) + math.abs(s1);
+            // float w0 = (weightTotal > 1e-5f) ? (math.abs(s0) / weightTotal) : 0.5f;
+            // float w1 = (weightTotal > 1e-5f) ? (math.abs(s1) / weightTotal) : 0.5f;
+
+            // float alphaB1 = 0.0f * w0 * 2.0f * (2.0f / 3.0f) + 1.0f * w1 * 2.0f * (1.0f / 3.0f);
+            // float alphaB2 = 0.0f * w0 * 2.0f * (1.0f / 3.0f) + 1.0f * w1 * 2.0f * (2.0f / 3.0f);
+
 
             // float2 leashB1 = leash0 + (1.0f / 3.0f) * math.abs(s0);
             // float2 leashB2 = leash1 - (1.0f / 3.0f) * math.abs(s1);
 
             // TODO: Figure out how to integrate scale (or if we want to).
-            float2 leashB1 = leash0 + math.lerp(leash0, leash1, 1.0f / 3.0f);
-            float2 leashB2 = leash1 - math.lerp(leash1, leash0, 1.0f / 3.0f);
+            // float2 leashB1 = leash0 + math.lerp(leash0, leash1, 1.0f / 3.0f);
+            // float2 leashB2 = leash1 - math.lerp(leash1, leash0, 1.0f / 3.0f);
+            float2 leashB1 = math.lerp(leash0, leash1, 1.0f / 3.0f);
+            float2 leashB2 = math.lerp(leash1, leash0, 2.0f / 3.0f);
 
             return SplineMath.SplineFromBezier(new float3(leash0, 0.0f), new float3(leashB1, 0.0f), new float3(leashB2, 0.0f), new float3(leash1, 0.0f));
         }

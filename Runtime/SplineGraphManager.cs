@@ -15,6 +15,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         
         [System.NonSerialized] public bool isEditingEnabled = false;
         [System.NonSerialized] public bool isRenderingEnabled = false;
+        [System.NonSerialized] public bool isAutoUpdateEnabled = false;
         public int type = 0;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
@@ -519,6 +520,13 @@ namespace Pastasfuture.SplineGraph.Runtime
                 sgm.isRenderingEnabled = isRenderingEnabledNew;
             }
 
+            bool isAutoUpdateEnabledNew = EditorGUILayout.Toggle("Is Auto Update Enabled", sgm.isAutoUpdateEnabled);
+            if (isAutoUpdateEnabledNew != sgm.isAutoUpdateEnabled)
+            {
+                sgm.UndoRecord("Toggled Spline Graph Manager isAutoUpdateEnabled");
+                sgm.isAutoUpdateEnabled = isAutoUpdateEnabledNew;
+            }
+
             // return; // TODO: Remove?
 
             sgm.debugIsSpawnEnabled = EditorGUILayout.Toggle("Debug Is Spawn Enabled", sgm.debugIsSpawnEnabled);
@@ -607,6 +615,11 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                     Handles.PositionHandle(position, rotation);
                 }
+            }
+
+            if (sgm.isAutoUpdateEnabled)
+            {
+                sgm.BuildGraphFromInstances();
             }
         }
     }

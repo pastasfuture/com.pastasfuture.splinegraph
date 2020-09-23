@@ -27,8 +27,15 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         private bool isDeserializationNeeded = true;
         [System.NonSerialized] public bool isDirty = true;
+        [System.NonSerialized] public int lastDirtyTimestamp = 0; // Do not need actual time, just a counter.
 
         public static List<SplineGraphComponent> instances = new List<SplineGraphComponent>();
+
+        public DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> GetSplineGraph()
+        {
+            Verify();
+            return splineGraph;
+        }
 
         void OnEnable()
         {
@@ -134,10 +141,18 @@ namespace Pastasfuture.SplineGraph.Runtime
             splineGraph.VertexMerge(vertexParent, vertexChild, Allocator.Persistent);
         }
 
-        public void UndoRecord(string message)
+        public void UndoRecord(string message, bool isForceNewOperationEnabled = false)
         {
+            Verify();
+
+            if (isForceNewOperationEnabled)
+            {
+                Undo.IncrementCurrentGroup();
+            }
+
             Undo.RecordObject(this, message);
             isDirty = true;
+            ++lastDirtyTimestamp;       
         }
 
         public void BuildCompactGraph()
@@ -297,6 +312,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         private float2 dragRectPositionSS0 = new float2(0.0f, 0.0f);
         private float2 dragRectPositionSS1 = new float2(0.0f, 0.0f);
 
+        private bool isExtruding = false;
+
         public override void OnInspectorGUI()
         {
             var sgc = target as SplineGraphComponent;
@@ -327,7 +344,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             EditorGUILayout.BeginVertical();
             if (GUILayout.Button("Add Vertex"))
             {
-                sgc.UndoRecord("Spline Graph Vertex Add");
+                sgc.UndoRecord("Spline Graph Vertex Add", true);
 
                 float3 position = new float3(0.0f, 0.0f, 0.0f);
                 quaternion rotation = quaternion.identity;
@@ -358,7 +375,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 1))
                 {
-                    sgc.UndoRecord("Spline Graph Edge(s) Add");
+                    sgc.UndoRecord("Spline Graph Edge(s) Add", true);
 
                     Int16 vertexParent = selectedIndices[0];
                     for (Int16 i = 1, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
@@ -374,7 +391,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 1))
                 {
-                    sgc.UndoRecord("Spline Graph Vertices Merge");
+                    sgc.UndoRecord("Spline Graph Vertices Merge", true);
 
                     Int16 vertexParent = selectedIndices[0];
                     for (Int16 i = 1, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
@@ -394,7 +411,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             if (GUILayout.Button("Build Compact Graph"))
             {
-                sgc.UndoRecord("Spline Graph Build Compact Graph");
+                sgc.UndoRecord("Spline Graph Build Compact Graph", true);
 
                 sgc.BuildCompactGraph();
 
@@ -406,7 +423,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             if (GUILayout.Button("Reverse"))
             {
-                sgc.UndoRecord("Spline Graph Reverse");
+                sgc.UndoRecord("Spline Graph Reverse", true);
 
                 sgc.BuildCompactReverseGraph();
 
@@ -416,11 +433,62 @@ namespace Pastasfuture.SplineGraph.Runtime
                 Repaint(); // Repaint editor to display selection changes in InspectorGUI.
             }
 
+            if (GUILayout.Button("Select All"))
+            {
+                selectedIndices.Clear();
+
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    selectionType = SelectionType.Vertex;
+                    selectedIndices.Add(v);
+                }
+
+
+                Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+            }
+
             if (GUILayout.Button("Deselect All"))
             {
                 selectedIndices.Clear();
                 Repaint(); // Repaint editor to display selection changes in InspectorGUI.
             }
+
+            if (GUILayout.Button("Recenter Transform"))
+            {
+                sgc.UndoRecord("Spline Graph Recenter Transform", true);
+
+                float3 positionAverage = float3.zero;
+                int positionAverageCount = 0;
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    positionAverage += sgc.splineGraph.payload.positions.data[v];
+                    ++positionAverageCount;
+                }
+
+                if (positionAverageCount > 0)
+                {
+                    positionAverage /= (float)positionAverageCount;
+                    
+                    for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                    {
+                        DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                        if (vertex.IsValid() == 0) { continue; }
+
+                        sgc.splineGraph.payload.positions.data[v] -= positionAverage;
+                        sgc.splineGraph.VertexComputePayloads(v);
+                    }
+
+                    Undo.RecordObject(sgc.transform, "Spline Graph Recenter Transform");
+                    sgc.transform.position += (Vector3)positionAverage;
+                }
+            }
+
             EditorGUILayout.EndVertical();
 
             Int16 indexAdd = -1;
@@ -513,7 +581,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             if (indexAdd != -1)
             {
-                sgc.UndoRecord("Spline Graph Vertex Insert");
+                sgc.UndoRecord("Spline Graph Vertex Insert", true);
                 {
                     float3 positionParent = sgc.splineGraph.payload.positions.data[indexAdd];
                     quaternion rotationParent = sgc.splineGraph.payload.rotations.data[indexAdd];
@@ -536,7 +604,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             if (indexRemove != -1)
             {
-                sgc.UndoRecord("Spline Graph Vertex Remove");
+                sgc.UndoRecord("Spline Graph Vertex Remove", true);
                 {
                     // Deselect vertex we are removing.
                     if ((selectedIndices.Count > 0) && (selectionType == SelectionType.Vertex))
@@ -558,6 +626,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
 
             EditorGUILayout.EndVertical();
+
+            sgc.Verify();
         }
 
         private void OnSceneGUI()
@@ -577,46 +647,35 @@ namespace Pastasfuture.SplineGraph.Runtime
                 ? transform.rotation
                 : Quaternion.identity;
 
-            // 1) Select vertex(s).
-            if (dragRectState == DragRectState.None)
+            if (!Event.current.shift || (GUIUtility.hotControl == 0))
             {
-                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                // Detect when user has stopped holding shift and reset extruding state.
+                // Also reset extrude state if user is no longer interacting with a control.
+                // This allows us to support the case where user holds shift, drags out, releases mouse but keeps holding shift,
+                // clicks mouse, drags out, etc.
+                // Feels a little jank that we would do this so high up, but it ensures we have all states covered.
+                isExtruding = false;
+            }
+
+            // Delete selected vertices if delete key is pressed.
+            if (Event.current != null 
+                && Event.current.isKey 
+                && Event.current.type == EventType.KeyUp 
+                && (Event.current.keyCode == KeyCode.Delete || Event.current.keyCode == KeyCode.Backspace))
+            {
+                if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 0))
                 {
-                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
-                    if (vertex.IsValid() == 0) { continue; }
+                    sgc.UndoRecord("Spline Graph Vertex Remove", true);
+                    Event.current.Use();
 
-                    float3 vertexPosition = sgc.splineGraph.payload.positions.data[v];
-                    vertexPosition = transform.TransformPoint(vertexPosition);
-
-                    quaternion vertexRotation = sgc.splineGraph.payload.rotations.data[v];
-                    vertexRotation = math.mul(rotation, vertexRotation);
-
-                    float handleSize = HandleUtility.GetHandleSize(vertexPosition);
-                    const float HANDLE_DISPLAY_SIZE = 0.05f;
-                    const float HANDLE_PICK_SIZE = HANDLE_DISPLAY_SIZE + HANDLE_DISPLAY_SIZE * 0.5f;
-                    if (Handles.Button(vertexPosition, vertexRotation, handleSize * HANDLE_DISPLAY_SIZE, handleSize * HANDLE_PICK_SIZE, Handles.DotHandleCap))
+                    for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
                     {
-                        if (Event.current.shift && (selectionType == SelectionType.Vertex))
-                        {
-                            // Additive / Subtractive selection.
-                            if (selectedIndices.IndexOf(v) >= 0)
-                            {
-                                selectedIndices.Remove(v);
-                            }
-                            else
-                            {
-                                selectedIndices.Add(v);
-                            }
+                        Int16 selectedVertexIndex = selectedIndices[i];
 
-                        }
-                        else
-                        {
-                            selectionType = SelectionType.Vertex;
-                            selectedIndices.Clear();
-                            selectedIndices.Add(v);
-                        }
-                        Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+                        sgc.VertexRemove(selectedVertexIndex);
                     }
+
+                    selectedIndices.Clear();
                 }
             }
 
@@ -712,22 +771,61 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     if (Tools.current == Tool.Move)
                     {
-                        sgc.UndoRecord("Edited Spline Graph Vertex Position");
-                        
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        if (Event.current.shift && !isExtruding)
                         {
-                            Int16 selectedVertexIndex = selectedIndices[i];
+                            // Extrude selected vertex / vertices along offset.
+                            sgc.UndoRecord("Edited Spline Graph Extude", true);
 
-                            float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
-                            vertexPositionOS = transform.TransformPoint(vertexPositionOS);
-                            vertexPositionOS += positionOffsetOS;
-                            vertexPositionOS = transform.InverseTransformPoint(vertexPositionOS);
-                            sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
+                            isExtruding = true;
+
+                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            {
+                                Int16 selectedVertexIndex = selectedIndices[i];
+
+                                float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
+                                vertexPositionOS = transform.TransformPoint(vertexPositionOS);
+                                vertexPositionOS += positionOffsetOS;
+                                vertexPositionOS = transform.InverseTransformPoint(vertexPositionOS);
+
+                                quaternion rotationParent = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
+                                float2 scaleParent = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
+                                float2 leashParent = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
+
+                                Int16 selectedVertexChildIndex = sgc.VertexAdd(vertexPositionOS, rotationParent, scaleParent, leashParent);
+                                sgc.EdgeAdd(selectedVertexIndex, selectedVertexChildIndex);
+
+                                // Update the selection to the new child vertex instead of the parent.
+                                // This makes it convenient to perform multiple extrusions.
+                                selectedIndices[i] = selectedVertexChildIndex;
+                            }
                         }
-
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        else
                         {
-                            sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
+                            // Standard move of currently selected vertex / vertices.
+                            if (isExtruding)
+                            {
+                                sgc.UndoRecord("Edited Spline Graph Extude");
+                            }
+                            else
+                            {
+                                sgc.UndoRecord("Edited Spline Graph Vertex Position", true);
+                            }
+                            
+                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            {
+                                Int16 selectedVertexIndex = selectedIndices[i];
+
+                                float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
+                                vertexPositionOS = transform.TransformPoint(vertexPositionOS);
+                                vertexPositionOS += positionOffsetOS;
+                                vertexPositionOS = transform.InverseTransformPoint(vertexPositionOS);
+                                sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
+                            }
+
+                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            {
+                                sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
+                            }
                         }
                     }
 
@@ -774,6 +872,59 @@ namespace Pastasfuture.SplineGraph.Runtime
                     }
                 }
             }
+
+            // WARNING: Make sure to draw selection handles after all modeling logic.
+            // This is necessary to make the extrusion hotkey work.
+            // Previously, when a vertex was extruded, that would cause a new Handles.Button() to be drawn for that vertex.
+            // That would in turn cause the handle IDs to change, forcing a deselection of the current Handles.PositionHandle().
+            // This is very brittle, keep an eye on this area of code.
+
+            // Select vertex(s).
+            if (dragRectState == DragRectState.None)
+            {
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    float3 vertexPosition = sgc.splineGraph.payload.positions.data[v];
+                    vertexPosition = transform.TransformPoint(vertexPosition);
+
+                    quaternion vertexRotation = sgc.splineGraph.payload.rotations.data[v];
+                    vertexRotation = math.mul(rotation, vertexRotation);
+
+                    float handleSize = HandleUtility.GetHandleSize(vertexPosition);
+                    const float HANDLE_DISPLAY_SIZE = 0.05f;
+                    const float HANDLE_PICK_SIZE = HANDLE_DISPLAY_SIZE + HANDLE_DISPLAY_SIZE * 0.5f;
+                    if (Handles.Button(vertexPosition, vertexRotation, handleSize * HANDLE_DISPLAY_SIZE, handleSize * HANDLE_PICK_SIZE, Handles.DotHandleCap))
+                    {
+                        if (Event.current.shift && (selectionType == SelectionType.Vertex))
+                        {
+                            // Additive / Subtractive selection.
+                            if (selectedIndices.IndexOf(v) >= 0)
+                            {
+                                selectedIndices.Remove(v);
+                            }
+                            else
+                            {
+                                selectedIndices.Add(v);
+                            }
+
+                        }
+                        else
+                        {
+                            selectionType = SelectionType.Vertex;
+                            selectedIndices.Clear();
+                            selectedIndices.Add(v);
+                        }
+                        Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+                    }
+                }
+            }
+
+            // Now that we have potentially performed some transforms to the spline graph, tell it to serialize (just to be safe).
+            // Otherwise, this serialization would happen next frame (which is probably fine?)
+            sgc.Verify();
         }
     }
     #endif

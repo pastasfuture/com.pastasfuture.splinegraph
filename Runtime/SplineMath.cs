@@ -57,6 +57,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                     3.0f * (this.zb.w - this.zb.z)
                 );
             }
+
+            public static readonly Spline zero = new Spline(float4.zero, float4.zero, float4.zero);
         }
 
         public struct SplinePathData
