@@ -9,12 +9,8 @@ using System;
 namespace Pastasfuture.SplineGraph.Runtime
 {
     [ExecuteInEditMode]
-    public class SplineGraphComponent : MonoBehaviour
-    #if UNITY_EDITOR
-    , ISerializationCallbackReceiver
-    #endif
+    public class SplineGraphComponent : MonoBehaviour, ISerializationCallbackReceiver
     {
-    #if UNITY_EDITOR
         // Warning: This is a component only intended for editor use.
         // All data and methods will be stripped from this component during build.
         //
@@ -99,6 +95,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDeserializationNeeded = true;
         }
 
+        #if UNITY_EDITOR
         public Int16 VertexAdd(float3 position, quaternion rotation, float2 scale, float2 leash)
         {
             Verify();
@@ -276,6 +273,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             Handles.matrix = handleMatrixPrevious;
             Handles.color = handleColorPrevious;
         }
+        #endif
 
         #if UNITY_EDITOR
         void OnDrawGizmos()
@@ -288,7 +286,6 @@ namespace Pastasfuture.SplineGraph.Runtime
             SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform);
         }
         #endif
-        #endif // #if UNITY_EDITOR
     }
 
     #if UNITY_EDITOR

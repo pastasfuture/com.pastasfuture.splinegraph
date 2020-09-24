@@ -82,6 +82,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 UpdateMeshFromSplineGraphManager();
             }
         }
+        #endif
 
         void UpdateMeshFromSplineGraphManager()
         {
@@ -324,6 +325,5 @@ namespace Pastasfuture.SplineGraph.Runtime
             mesh.triangles = trianglesTrimmed;
             meshFilter.sharedMesh = mesh;
         }
-        #endif
     }
 }
