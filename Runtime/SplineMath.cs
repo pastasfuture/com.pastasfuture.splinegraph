@@ -754,9 +754,44 @@ namespace Pastasfuture.SplineGraph.Runtime
             NativeArray<Spline> splinesParentToChild,
             NativeArray<float3> splineBounds)
         {
+            FindTFromClosestPointOnSplineGraph(
+                out t,
+                out d,
+                out edgeIndex,
+                out Int16 vertexIndexUnused,
+                isReverse,
+                point,
+                distanceThresholdMin,
+                distanceThresholdMax,
+                vertices,
+                verticesCount,
+                edgesParentToChild,
+                splinesParentToChild,
+                splineBounds
+            );
+        }
+
+        // This is a brute force method (checking all of the spline segments).
+        [BurstCompile]
+        public static void FindTFromClosestPointOnSplineGraph(
+            out float t,
+            out float d,
+            out Int16 edgeIndex,
+            out Int16 vertexIndex,
+            int isReverse,
+            float3 point,
+            float distanceThresholdMin,
+            float distanceThresholdMax,
+            NativeArray<DirectedVertex> vertices,
+            int verticesCount,
+            NativeArray<DirectedEdge> edgesParentToChild,
+            NativeArray<Spline> splinesParentToChild,
+            NativeArray<float3> splineBounds)
+        {
             t = 0.0f;
             d = float.MaxValue;
             edgeIndex = -1;
+            vertexIndex = -1;
             for (Int16 v = 0; v < verticesCount; ++v)
             {
                 DirectedVertex vertex = vertices[v];
@@ -795,6 +830,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                         d = currentD;
                         t = currentT;
                         edgeIndex = edgeIndexCurrent;
+                        vertexIndex = v;
                     }
                 }
             }
