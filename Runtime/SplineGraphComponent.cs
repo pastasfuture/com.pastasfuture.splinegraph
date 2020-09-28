@@ -266,6 +266,21 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                         float3 labelPosition = arrowPosition + math.mul(arrowRotation, new float3(0.0f, arrowSize * 2.0f, 0.0f));
                         // Handles.Label(labelPosition, "Length = " + splineLength);
+
+                        // Display the spline's curvature at its halfway point along the spline.
+                        // {
+                        //     // float curvature = SplineMath.EvaluateCurvatureFromT(spline, 0.5f);
+                        //     // Handles.Label(labelPosition, "Curvature = " + curvature);
+                        //     for (int s = 0; s < SAMPLE_COUNT; ++s)
+                        //     {
+                        //         float t0 = (float)(s + 0) * SAMPLE_COUNT_INVERSE;
+
+                        //         float3 samplePosition0 = SplineMath.EvaluatePositionFromT(spline, t0);
+
+                        //         float curvature = SplineMath.EvaluateCurvatureFromT(spline, t0);
+                        //         Handles.Label(samplePosition0, "Curvature = " + curvature);
+                        //     }
+                        // }
                     }
                 }
             }
