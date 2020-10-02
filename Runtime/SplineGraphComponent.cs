@@ -149,7 +149,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             Undo.RecordObject(this, message);
             isDirty = true;
-            ++lastDirtyTimestamp;       
+            ++lastDirtyTimestamp;  
         }
 
         public void BuildCompactGraph()

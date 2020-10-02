@@ -801,37 +801,185 @@ namespace Pastasfuture.SplineGraph.Runtime
                     edgeIndexCurrent != -1;
                     edgeIndexCurrent = edgesParentToChild[edgeIndexCurrent].next)
                 {
-                    DirectedEdge edge = edgesParentToChild[edgeIndexCurrent];
-                    Debug.Assert(edge.IsValid() == 1);
 
-                    Spline spline = splinesParentToChild[edgeIndexCurrent];
+                    FindTFromClosestPointOnSplineGraphEdge(
+                        out float currentT,
+                        out float currentD,
+                        edgeIndexCurrent,
+                        point,
+                        distanceThresholdMin,
+                        distanceThresholdMax,
+                        edgesParentToChild,
+                        splinesParentToChild,
+                        splineBounds
+                    );
 
-                    // TODO: Precompute spline bounds and pass in.
-                    float3 aabbMin = splineBounds[edgeIndexCurrent * 2 + 0];
-                    float3 aabbMax = splineBounds[edgeIndexCurrent * 2 + 1];
-
-                    // Dilate spline AABB by distance threshold.
-                    aabbMin -= new float3(distanceThresholdMax, distanceThresholdMax, distanceThresholdMax);
-                    aabbMax += new float3(distanceThresholdMax, distanceThresholdMax, distanceThresholdMax);
-
-                    // If dilated spline AABB does not contain point, then there is no point along spline that is within distanceThresholdMax from point.
-                    // Early out.
-                    if (point.x > aabbMax.x || point.y > aabbMax.y || point.z > aabbMax.z
-                        || point.x < aabbMin.x || point.y < aabbMin.y || point.z < aabbMin.z)
-                    {
-                        continue;
-                    }
-
-                    float currentT;
-                    float currentD;
-                    FindTFromClosestPointOnSpline(out currentT, out currentD, point, spline);
-                    if (currentD > distanceThresholdMin && currentD < distanceThresholdMax && currentD < d)
+                    if (currentD >= distanceThresholdMin && currentD <= distanceThresholdMax && currentD < d)
                     {
                         d = currentD;
                         t = currentT;
                         edgeIndex = edgeIndexCurrent;
                         vertexIndex = v;
                     }
+                }
+            }
+
+            if ((isReverse == 1) && (edgeIndex != -1)) { t = 1.0f - t; }
+        }
+
+        [BurstCompile]
+        public static void FindTFromClosestPointOnSplineGraphEdge(
+            out float t,
+            out float d,
+            Int16 edgeIndex,
+            float3 point,
+            float distanceThresholdMin,
+            float distanceThresholdMax,
+            NativeArray<DirectedEdge> edgesParentToChild,
+            NativeArray<Spline> splinesParentToChild,
+            NativeArray<float3> splineBounds)
+        {
+            t = 0.0f;
+            d = float.MaxValue;
+
+            DirectedEdge edge = edgesParentToChild[edgeIndex];
+            Debug.Assert(edge.IsValid() == 1);
+
+            Spline spline = splinesParentToChild[edgeIndex];
+
+            float3 aabbMin = splineBounds[edgeIndex * 2 + 0];
+            float3 aabbMax = splineBounds[edgeIndex * 2 + 1];
+
+            // Dilate spline AABB by distance threshold.
+            aabbMin -= new float3(distanceThresholdMax, distanceThresholdMax, distanceThresholdMax);
+            aabbMax += new float3(distanceThresholdMax, distanceThresholdMax, distanceThresholdMax);
+
+            // If dilated spline AABB does not contain point, then there is no point along spline that is within distanceThresholdMax from point.
+            // Early out.
+            if (point.x > aabbMax.x || point.y > aabbMax.y || point.z > aabbMax.z
+                || point.x < aabbMin.x || point.y < aabbMin.y || point.z < aabbMin.z)
+            {
+                return;
+            }
+
+            FindTFromClosestPointOnSpline(out t, out d, point, spline);
+        }
+
+        // Same as FindTFromClosestPointOnSplineGraph but only searches within the parent and child edges for the passed in edgeIndex.
+        // Warning: This function has no bookkeeping to track feedback loops where children point back to already checked parents.
+        // For a single parent child neighborhood, this should rarely result in duplicate checks (in practice).
+        // The only time a duplicate check should occur would be with this topology:
+        //
+        //   --------
+        //  /        \
+        // +          +
+        //  \        /
+        //   --------
+        //
+        [BurstCompile]
+        public static void FindTFromClosestPointOnSplineGraphNeighborhood(
+            out float t,
+            out float d,
+            out Int16 edgeIndex,
+            out Int16 vertexIndex,
+            Int16 edgeIndexNeighborhoodCenter,
+            int isReverse,
+            float3 point,
+            float distanceThresholdMin,
+            float distanceThresholdMax,
+            NativeArray<DirectedVertex> vertices,
+            int verticesCount,
+            NativeArray<DirectedEdge> edgesParentToChild,
+            NativeArray<DirectedEdge> edgesChildToParent,
+            NativeArray<Spline> splinesParentToChild,
+            NativeArray<float3> splineBounds)
+        {
+            t = 0.0f;
+            d = float.MaxValue;
+            edgeIndex = -1;
+            vertexIndex = -1;
+
+            Int16 vertexIndexChild = edgesParentToChild[edgeIndexNeighborhoodCenter].vertexIndex;
+            DirectedVertex vertexChild = vertices[vertexIndexChild];
+            Debug.Assert(vertexChild.IsValid() == 1);
+
+            Int16 vertexIndexParent = edgesChildToParent[edgeIndexNeighborhoodCenter].vertexIndex;
+            DirectedVertex vertexParent = vertices[vertexIndexParent];
+            Debug.Assert(vertexParent.IsValid() == 1);
+
+            // First: Check the neighborhood center edge.
+            Int16 edgeIndexCurrent = edgeIndexNeighborhoodCenter;
+            {
+                FindTFromClosestPointOnSplineGraphEdge(
+                    out float currentT,
+                    out float currentD,
+                    edgeIndexCurrent,
+                    point,
+                    distanceThresholdMin,
+                    distanceThresholdMax,
+                    edgesParentToChild,
+                    splinesParentToChild,
+                    splineBounds
+                );
+
+                if (currentD >= distanceThresholdMin && currentD <= distanceThresholdMax && currentD < d)
+                {
+                    d = currentD;
+                    t = currentT;
+                    edgeIndex = edgeIndexCurrent;
+                    vertexIndex = vertexIndexParent;
+                }
+            }
+
+            // Then check the neighborhood center edge's child vertex children.
+            for (edgeIndexCurrent = vertexChild.childHead;
+                edgeIndexCurrent != -1;
+                edgeIndexCurrent = edgesParentToChild[edgeIndexCurrent].next)
+            {
+                FindTFromClosestPointOnSplineGraphEdge(
+                    out float currentT,
+                    out float currentD,
+                    edgeIndexCurrent,
+                    point,
+                    distanceThresholdMin,
+                    distanceThresholdMax,
+                    edgesParentToChild,
+                    splinesParentToChild,
+                    splineBounds
+                );
+
+                if (currentD >= distanceThresholdMin && currentD <= distanceThresholdMax && currentD < d)
+                {
+                    d = currentD;
+                    t = currentT;
+                    edgeIndex = edgeIndexCurrent;
+                    vertexIndex = vertexIndexChild;
+                }
+            }
+
+            // Last, check the neighborhood center edge's parent vertex parents.
+            for (edgeIndexCurrent = vertexParent.parentHead;
+                edgeIndexCurrent != -1;
+                edgeIndexCurrent = edgesChildToParent[edgeIndexCurrent].next)
+            {
+                FindTFromClosestPointOnSplineGraphEdge(
+                    out float currentT,
+                    out float currentD,
+                    edgeIndexCurrent,
+                    point,
+                    distanceThresholdMin,
+                    distanceThresholdMax,
+                    edgesParentToChild,
+                    splinesParentToChild,
+                    splineBounds
+                );
+
+                if (currentD >= distanceThresholdMin && currentD <= distanceThresholdMax && currentD < d)
+                {
+                    d = currentD;
+                    t = currentT;
+                    edgeIndex = edgeIndexCurrent;
+                    vertexIndex = edgesChildToParent[edgeIndexCurrent].vertexIndex;
                 }
             }
 
