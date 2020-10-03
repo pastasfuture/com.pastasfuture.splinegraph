@@ -513,7 +513,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         [BurstCompile]
         private static void FindTFromClosestPointOnSplineNewtonRaphson(out float tOut, out float dOut, Spline spline, float3 point, float tIn, int iterationCount)
         {
-            Debug.Assert(tIn >= 0.0f && tIn <= 1.0f, "Error: SplineMath::FindTFromClosestPointOnSplineNewtonRaphson(): tIn is out of [0, 1] range: " + tIn);
+            Debug.Assert(tIn >= 0.0f && tIn <= 1.0f);
             const float T_MAX = 1.0f - 1e-6f;
 
             float skLast = tIn;
