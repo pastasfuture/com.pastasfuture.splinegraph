@@ -410,6 +410,9 @@ namespace Pastasfuture.SplineGraph.Runtime
             mesh.normals = normalsTrimmed;
             mesh.triangles = trianglesTrimmed;
             meshFilter.sharedMesh = mesh;
+
+            MeshCollider meshCollider = meshFilter.gameObject.GetComponent<MeshCollider>();
+            if (meshCollider != null) { meshCollider.sharedMesh = mesh; }
         }
     }
 }
