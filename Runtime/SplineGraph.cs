@@ -94,8 +94,8 @@ namespace Pastasfuture.SplineGraph.Runtime
     [BurstCompile, System.Serializable]
     public struct DirectedEdge
     {
-        public Int16 vertexIndex;
-        public Int16 next;
+        public Int32 vertexIndex;
+        public Int32 next;
 
         public int IsValid()
         {
@@ -115,13 +115,13 @@ namespace Pastasfuture.SplineGraph.Runtime
     [BurstCompile, System.Serializable]
     public struct DirectedVertex
     {
-        public Int16 parentHead;
-        public Int16 childHead;
+        public Int32 parentHead;
+        public Int32 childHead;
 
         public int IsValid()
         {
-            // Since the only valid range of values is {-1, Int16.MaxValue}, we can safely use
-            // any number in the {-Int16.MaxValue, -2} range to indicate invalid state.
+            // Since the only valid range of values is {-1, Int32.MaxValue}, we can safely use
+            // any number in the {-Int32.MaxValue, -2} range to indicate invalid state.
             return (parentHead == -2) ? 0 : 1;
         }
 
@@ -140,16 +140,16 @@ namespace Pastasfuture.SplineGraph.Runtime
         void Create(out T res, Allocator allocator);
         void Dispose();
         void Clear();
-        void VertexEnsure(Int16 capacityRequested, Allocator allocator);
-        void EdgeEnsure(Int16 capacityRequested, Allocator allocator);
-        Int16 VertexPush(Allocator allocator);
-        void VertexCopy(ref T src, Int16 vertexSrc, ref T dst, Int16 vertexDst); // Really, this is static.
-        void VertexSwap(ref T src, Int16 vertexSrc, ref T dst, Int16 vertexDst); // Really, this is static.
-        Int16 EdgePush(Allocator allocator);
-        void EdgeCopy(ref T src, Int16 edgeSrc, ref T dst, Int16 edgeDst); // Really, this is static.
-        void EdgeSwap(ref T src, Int16 edgeSrc, ref T dst, Int16 edgeDst); // Really, this is static.
-        void VertexComputePayloads(ref DirectedGraph<T, SerializableT> graph, Int16 vertexIndex);
-        void EdgeComputePayloads(ref DirectedGraph<T, SerializableT> graph, Int16 vertexParent, Int16 vertexChild);
+        void VertexEnsure(Int32 capacityRequested, Allocator allocator);
+        void EdgeEnsure(Int32 capacityRequested, Allocator allocator);
+        Int32 VertexPush(Allocator allocator);
+        void VertexCopy(ref T src, Int32 vertexSrc, ref T dst, Int32 vertexDst); // Really, this is static.
+        void VertexSwap(ref T src, Int32 vertexSrc, ref T dst, Int32 vertexDst); // Really, this is static.
+        Int32 EdgePush(Allocator allocator);
+        void EdgeCopy(ref T src, Int32 edgeSrc, ref T dst, Int32 edgeDst); // Really, this is static.
+        void EdgeSwap(ref T src, Int32 edgeSrc, ref T dst, Int32 edgeDst); // Really, this is static.
+        void VertexComputePayloads(ref DirectedGraph<T, SerializableT> graph, Int32 vertexIndex);
+        void EdgeComputePayloads(ref DirectedGraph<T, SerializableT> graph, Int32 vertexParent, Int32 vertexChild);
         void Serialize(ref SerializableT o);
         void Deserialize(ref SerializableT i, Allocator allocator);
     }
@@ -271,7 +271,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 edgeBounds.Ensure(i.edgeLengths.Length * EDGE_BOUNDS_STRIDE, allocator);
                 edgeBounds.count = edgeBoundsCountRequested;
 
-                for (Int16 edgeIndex = 0, edgeCount = (Int16)i.edgeParentToChildSplines.Length; edgeIndex < edgeCount; ++ edgeIndex)
+                for (Int32 edgeIndex = 0, edgeCount = (Int32)i.edgeParentToChildSplines.Length; edgeIndex < edgeCount; ++ edgeIndex)
                 {
                     SplineMath.Spline edgeParentToChildSpline = edgeParentToChildSplines.data[edgeIndex];
 
@@ -287,7 +287,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             
         }
 
-        public void VertexEnsure(Int16 capacityRequested, Allocator allocator)
+        public void VertexEnsure(Int32 capacityRequested, Allocator allocator)
         {
             positions.Ensure(capacityRequested, allocator);
             rotations.Ensure(capacityRequested, allocator);
@@ -295,7 +295,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             leashes.Ensure(capacityRequested, allocator);
         }
 
-        public void EdgeEnsure(Int16 capacityRequested, Allocator allocator)
+        public void EdgeEnsure(Int32 capacityRequested, Allocator allocator)
         {
             edgeParentToChildSplines.Ensure(capacityRequested, allocator);
             edgeChildToParentSplines.Ensure(capacityRequested, allocator);
@@ -305,9 +305,9 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeBounds.Ensure(capacityRequested * EDGE_BOUNDS_STRIDE, allocator);
         }
 
-        public Int16 VertexPush(Allocator allocator)
+        public Int32 VertexPush(Allocator allocator)
         {
-            Int16 res = (Int16)positions.count;
+            Int32 res = (Int32)positions.count;
 
             positions.Push(float3.zero, allocator);
             rotations.Push(quaternion.identity, allocator);
@@ -318,7 +318,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         // Really, this is static.
-        public void VertexCopy(ref SplineGraphPayload src, Int16 vertexSrc, ref SplineGraphPayload dst, Int16 vertexDst)
+        public void VertexCopy(ref SplineGraphPayload src, Int32 vertexSrc, ref SplineGraphPayload dst, Int32 vertexDst)
         {
             dst.positions.data[vertexDst] = src.positions.data[vertexSrc];
             dst.rotations.data[vertexDst] = src.rotations.data[vertexSrc];
@@ -327,14 +327,14 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         // Really, this is static.
-        public void VertexSwap(ref SplineGraphPayload src, Int16 vertexSrc, ref SplineGraphPayload dst, Int16 vertexDst)
+        public void VertexSwap(ref SplineGraphPayload src, Int32 vertexSrc, ref SplineGraphPayload dst, Int32 vertexDst)
         {
             // TODO:
         }
 
-        public Int16 EdgePush(Allocator allocator)
+        public Int32 EdgePush(Allocator allocator)
         {
-            Int16 res = (Int16)edgeParentToChildSplines.count;
+            Int32 res = (Int32)edgeParentToChildSplines.count;
 
             edgeParentToChildSplines.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
             edgeChildToParentSplines.Push(new SplineMath.Spline(float4.zero, float4.zero, float4.zero), allocator);
@@ -347,23 +347,23 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         // Really, this is static.
-        public void EdgeCopy(ref SplineGraphPayload src, Int16 edgeSrc, ref SplineGraphPayload dst, Int16 edgeDst)
+        public void EdgeCopy(ref SplineGraphPayload src, Int32 edgeSrc, ref SplineGraphPayload dst, Int32 edgeDst)
         {
             // TODO:
         }
 
         // Really, this is static.
-        public void EdgeSwap(ref SplineGraphPayload src, Int16 edgeSrc, ref SplineGraphPayload dst, Int16 edgeDst)
+        public void EdgeSwap(ref SplineGraphPayload src, Int32 edgeSrc, ref SplineGraphPayload dst, Int32 edgeDst)
         {
             // TODO:
         }
 
-        public void VertexComputePayloads(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexIndex)
+        public void VertexComputePayloads(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int32 vertexIndex)
         {
             // TODO:
         }
 
-        public void EdgeComputePayloads(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexParent, Int16 vertexChild)
+        public void EdgeComputePayloads(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < graph.vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < graph.vertices.count);
@@ -373,7 +373,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // TODO: Could bubble up this search by passing in edge indices directly.
             // Would help remove redundant searches.
             // Might not matter.
-            Int16 edgeIndex = graph.EdgeFindIndex(vertexParent, vertexChild);
+            Int32 edgeIndex = graph.EdgeFindIndex(vertexParent, vertexChild);
             Debug.Assert(edgeIndex >= 0 && edgeIndex < edgeParentToChildSplines.count);
 
             SplineMath.Spline edgeParentToChildSpline = ComputeSplineFromVerticesParentToChild(ref graph, vertexParent, vertexChild);
@@ -393,7 +393,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.data[edgeIndex] = SplineMath.SplineFromReverse(edgeParentToChildSplineLeash);
         }
 
-        public SplineMath.Spline ComputeSplineFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexParent, Int16 vertexChild)
+        public SplineMath.Spline ComputeSplineFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < graph.vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < graph.vertices.count);
@@ -416,7 +416,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             return SplineMath.SplineFromHermite(p0, p1, v0, v1);
         }
 
-        public SplineMath.Spline ComputeSplineLeashFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexParent, Int16 vertexChild)
+        public SplineMath.Spline ComputeSplineLeashFromVerticesParentToChild(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < graph.vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < graph.vertices.count);
@@ -457,9 +457,9 @@ namespace Pastasfuture.SplineGraph.Runtime
         public DirectedEdge[] edgePoolParents;
         public DirectedEdge[] edgePoolChildren;
 
-        public UInt16 verticesFreeHoleCount;
-        public UInt16 edgePoolParentsFreeHoleCount;
-        public UInt16 edgePoolChildrenFreeHoleCount;
+        public UInt32 verticesFreeHoleCount;
+        public UInt32 edgePoolParentsFreeHoleCount;
+        public UInt32 edgePoolChildrenFreeHoleCount;
     }
 
     [BurstCompile]
@@ -471,9 +471,9 @@ namespace Pastasfuture.SplineGraph.Runtime
         public NativeArrayDynamic<DirectedEdge> edgePoolParents;
         public NativeArrayDynamic<DirectedEdge> edgePoolChildren;
 
-        public UInt16 verticesFreeHoleCount;
-        public UInt16 edgePoolParentsFreeHoleCount;
-        public UInt16 edgePoolChildrenFreeHoleCount;
+        public UInt32 verticesFreeHoleCount;
+        public UInt32 edgePoolParentsFreeHoleCount;
+        public UInt32 edgePoolChildrenFreeHoleCount;
 
         public DirectedGraph(Allocator allocator)
         {
@@ -537,19 +537,19 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgePoolChildren.FromArray(ig.edgePoolChildren, allocator);
         }
 
-        public Int16 ComputeVertexIsValidCount()
+        public Int32 ComputeVertexIsValidCount()
         {
-            return (Int16)(vertices.count - verticesFreeHoleCount);
+            return (Int32)(vertices.count - verticesFreeHoleCount);
         }
 
-        public Int16 ComputeEdgeIsValidCount()
+        public Int32 ComputeEdgeIsValidCount()
         {
-            return (Int16)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
+            return (Int32)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
         }
 
-        public Int16 VertexAdd(Allocator allocator)
+        public Int32 VertexAdd(Allocator allocator)
         {
-            Int16 res = (Int16)vertices.count;
+            Int32 res = (Int32)vertices.count;
 
             vertices.Push(new DirectedVertex { parentHead = -1, childHead = -1 }, allocator);
 
@@ -558,7 +558,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             return res;
         }
 
-        public void VertexRemove(Int16 vertexIndex)
+        public void VertexRemove(Int32 vertexIndex)
         {
             Debug.Assert(vertexIndex >= 0 && vertexIndex < vertices.count);
             Debug.Assert(vertices.data[vertexIndex].IsValid() == 1);
@@ -566,16 +566,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             // 1) Visit all parents of vertex we are removing, and remove their links to that vertex.
             while (vertices.data[vertexIndex].parentHead != -1)
             {
-                Int16 edgeIndex = vertices.data[vertexIndex].parentHead;
-                Int16 vertexParent = edgePoolParents.data[edgeIndex].vertexIndex;
+                Int32 edgeIndex = vertices.data[vertexIndex].parentHead;
+                Int32 vertexParent = edgePoolParents.data[edgeIndex].vertexIndex;
                 EdgeRemove(vertexParent, vertexIndex);
             }
 
             // 2) Visit all children of vertex we are removing, and remove their links to that vertex.
             while (vertices.data[vertexIndex].childHead != -1)
             {
-                Int16 edgeIndex = vertices.data[vertexIndex].childHead;
-                Int16 vertexChild = edgePoolChildren.data[edgeIndex].vertexIndex;
+                Int32 edgeIndex = vertices.data[vertexIndex].childHead;
+                Int32 vertexChild = edgePoolChildren.data[edgeIndex].vertexIndex;
                 EdgeRemove(vertexIndex, vertexChild);
             }
 
@@ -584,7 +584,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             ++verticesFreeHoleCount;
         }
 
-        public void VertexMerge(Int16 vertexParent, Int16 vertexChild, Allocator allocator)
+        public void VertexMerge(Int32 vertexParent, Int32 vertexChild, Allocator allocator)
         {
             // Vertex Merge:
             {
@@ -598,14 +598,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                 DirectedVertex vertexB = vertices.data[vertexChild];
 
                 // 1) Connect all vertexChild children to vertexParent.
-                for (Int16 edgeIndex = vertexB.childHead;
+                for (Int32 edgeIndex = vertexB.childHead;
                     edgeIndex != -1;
                     edgeIndex = edgePoolChildren.data[edgeIndex].next)
                 {
                     DirectedEdge edge = edgePoolChildren.data[edgeIndex];
                     Debug.Assert(edge.IsValid() == 1);
 
-                    Int16 vertexChildChild = edge.vertexIndex;
+                    Int32 vertexChildChild = edge.vertexIndex;
                     Debug.Assert(vertexChildChild >= 0 && vertexChildChild < vertices.count);
                     Debug.Assert(vertices.data[vertexChildChild].IsValid() == 1);
                     Debug.Assert(vertexChildChild != vertexChild);
@@ -625,14 +625,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
 
                 // 2) Connect all vertexChild parents to vertexParent.
-                for (Int16 edgeIndex = vertexB.parentHead;
+                for (Int32 edgeIndex = vertexB.parentHead;
                     edgeIndex != -1;
                     edgeIndex = edgePoolParents.data[edgeIndex].next)
                 {
                     DirectedEdge edge = edgePoolParents.data[edgeIndex];
                     Debug.Assert(edge.IsValid() == 1);
 
-                    Int16 vertexChildParent = edge.vertexIndex;
+                    Int32 vertexChildParent = edge.vertexIndex;
                     Debug.Assert(vertexChildParent >= 0 && vertexChildParent < vertices.count);
                     Debug.Assert(vertices.data[vertexChildParent].IsValid() == 1);
                     Debug.Assert(vertexChildParent != vertexChild);
@@ -662,35 +662,35 @@ namespace Pastasfuture.SplineGraph.Runtime
             payload.VertexComputePayloads(ref this, vertexParent);
         }
 
-        public Int16 VertexComputeParentCount(Int16 vertexIndex)
+        public Int32 VertexComputeParentCount(Int32 vertexIndex)
         {
             Debug.Assert(vertexIndex >= 0 && vertexIndex < vertices.count);
             DirectedVertex vertex = vertices.data[vertexIndex];
             Debug.Assert(vertex.IsValid() == 1);
 
-            Int16 parentCount = 0;
-            for (Int16 edgeIndex = vertex.parentHead; edgeIndex != -1; edgeIndex = edgePoolParents.data[edgeIndex].next)
+            Int32 parentCount = 0;
+            for (Int32 edgeIndex = vertex.parentHead; edgeIndex != -1; edgeIndex = edgePoolParents.data[edgeIndex].next)
             {
-                parentCount = (Int16)(parentCount + 1);
+                parentCount = (Int32)(parentCount + 1);
             }
             return parentCount;
         }
 
-        public Int16 VertexComputeChildCount(Int16 vertexIndex)
+        public Int32 VertexComputeChildCount(Int32 vertexIndex)
         {
             Debug.Assert(vertexIndex >= 0 && vertexIndex < vertices.count);
             DirectedVertex vertex = vertices.data[vertexIndex];
             Debug.Assert(vertex.IsValid() == 1);
 
-            Int16 childCount = 0;
-            for (Int16 edgeIndex = vertex.childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+            Int32 childCount = 0;
+            for (Int32 edgeIndex = vertex.childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
-                childCount = (Int16)(childCount + 1);
+                childCount = (Int32)(childCount + 1);
             }
             return childCount;
         }
 
-        public void VertexComputePayloads(Int16 vertexIndex)
+        public void VertexComputePayloads(Int32 vertexIndex)
         {
             Debug.Assert(vertexIndex >= 0 && vertexIndex < vertices.count);
             
@@ -700,33 +700,33 @@ namespace Pastasfuture.SplineGraph.Runtime
             payload.VertexComputePayloads(ref this, vertexIndex);
 
             // Compute all child edge payloads.
-            for (Int16 edgeIndex = vertex.childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+            for (Int32 edgeIndex = vertex.childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
                 DirectedEdge edge = edgePoolChildren.data[edgeIndex];
-                Int16 vertexChild = edge.vertexIndex;
+                Int32 vertexChild = edge.vertexIndex;
 
                 EdgeComputePayloads(vertexIndex, vertexChild);
             }
 
             // Compute all parent edge payloads.
-            for (Int16 edgeIndex = vertex.parentHead; edgeIndex != -1; edgeIndex = edgePoolParents.data[edgeIndex].next)
+            for (Int32 edgeIndex = vertex.parentHead; edgeIndex != -1; edgeIndex = edgePoolParents.data[edgeIndex].next)
             {
                 DirectedEdge edge = edgePoolParents.data[edgeIndex];
-                Int16 vertexParent = edge.vertexIndex;
+                Int32 vertexParent = edge.vertexIndex;
 
                 EdgeComputePayloads(vertexParent, vertexIndex);
             }
         }
 
-        public void EdgeComputePayloads(Int16 vertexParent, Int16 vertexChild)
+        public void EdgeComputePayloads(Int32 vertexParent, Int32 vertexChild)
         {
             payload.EdgeComputePayloads(ref this, vertexParent, vertexChild);
         }
 
-        public void EdgeAdd(Int16 vertexParent, Int16 vertexChild, Allocator allocator)
+        public void EdgeAdd(Int32 vertexParent, Int32 vertexChild, Allocator allocator)
         {
-            Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count, "Error: EdgeAdd(): vertexParent: " + vertexChild + " out of range: [0, " + vertices.count + "]");
-            Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count, "Error: EdgeAdd(): vertexChild: " + vertexChild + " out of range: [0, " + vertices.count + "]");
+            Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count);//, "Error: EdgeAdd(): vertexParent: " + vertexChild + " out of range: [0, " + vertices.count + "]");
+            Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count);//, "Error: EdgeAdd(): vertexChild: " + vertexChild + " out of range: [0, " + vertices.count + "]");
 
             Debug.Assert(vertices.data[vertexParent].IsValid() == 1);
             Debug.Assert(vertices.data[vertexChild].IsValid() == 1);
@@ -743,7 +743,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // (just in different data arrays).
 
             // TODO!
-            for (Int16 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexParent].childHead;
+            for (Int32 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexParent].childHead;
                 true;
                 edgeIndexPrevious = edgeIndex, edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
@@ -761,14 +761,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                     if (edgeIndexPrevious != -1)
                     {
                         DirectedEdge edge = edgePoolChildren.data[edgeIndexPrevious];
-                        edge.next = (Int16)(edgePoolChildren.count - 1);
+                        edge.next = (Int32)(edgePoolChildren.count - 1);
                         edgePoolChildren.data[edgeIndexPrevious] = edge;
                     }
 
                     if (vertices.data[vertexParent].childHead == -1)
                     {
                         DirectedVertex vertex = vertices.data[vertexParent]; 
-                        vertex.childHead = (Int16)(edgePoolChildren.count - 1);
+                        vertex.childHead = (Int32)(edgePoolChildren.count - 1);
                         vertices.data[vertexParent] = vertex; 
                     }
 
@@ -776,7 +776,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
 
-            for (Int16 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexChild].parentHead;
+            for (Int32 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexChild].parentHead;
                 true;
                 edgeIndexPrevious = edgeIndex, edgeIndex = edgePoolParents.data[edgeIndex].next)
             {
@@ -794,14 +794,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                     if (edgeIndexPrevious != -1)
                     {
                         DirectedEdge edge = edgePoolParents.data[edgeIndexPrevious]; 
-                        edge.next = (Int16)(edgePoolParents.count - 1);
+                        edge.next = (Int32)(edgePoolParents.count - 1);
                         edgePoolParents.data[edgeIndexPrevious] = edge;
                     }
 
                     if (vertices.data[vertexChild].parentHead == -1)
                     {
                         DirectedVertex vertex = vertices.data[vertexChild]; 
-                        vertex.parentHead = (Int16)(edgePoolParents.count - 1);
+                        vertex.parentHead = (Int32)(edgePoolParents.count - 1);
                         vertices.data[vertexChild] = vertex;
                     }
 
@@ -814,12 +814,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             payload.EdgeComputePayloads(ref this, vertexParent, vertexChild);
         }
 
-        public int EdgeContains(Int16 vertexParent, Int16 vertexChild)
+        public int EdgeContains(Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count);
 
-            for (Int16 edgeIndex = vertices.data[vertexParent].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+            for (Int32 edgeIndex = vertices.data[vertexParent].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
                 Debug.Assert(edgeIndex >= 0 && edgeIndex < edgePoolChildren.count);
                 DirectedEdge edge = edgePoolChildren.data[edgeIndex];
@@ -835,12 +835,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             return 0;
         }
 
-        public void EdgeRemove(Int16 vertexParent, Int16 vertexChild)
+        public void EdgeRemove(Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count);
 
-            for (Int16 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexParent].childHead;
+            for (Int32 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexParent].childHead;
                 true;
                 edgeIndexPrevious = edgeIndex, edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
@@ -871,7 +871,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
 
-            for (Int16 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexChild].parentHead;
+            for (Int32 edgeIndexPrevious = -1, edgeIndex = vertices.data[vertexChild].parentHead;
                 true;
                 edgeIndexPrevious = edgeIndex, edgeIndex = edgePoolParents.data[edgeIndex].next)
             {
@@ -903,7 +903,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
         }
 
-        public void EdgeReverse(Int16 vertexParent, Int16 vertexChild, Allocator allocator)
+        public void EdgeReverse(Int32 vertexParent, Int32 vertexChild, Allocator allocator)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count);
@@ -914,7 +914,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             EdgeAdd(vertexChild, vertexParent, allocator);
         }
 
-        public Int16 EdgeFindIndex(Int16 vertexParent, Int16 vertexChild)
+        public Int32 EdgeFindIndex(Int32 vertexParent, Int32 vertexChild)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count);
             Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count);
@@ -922,7 +922,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             Debug.Assert(vertices.data[vertexParent].IsValid() == 1);
             Debug.Assert(vertices.data[vertexChild].IsValid() == 1);
 
-            for (Int16 edgeIndex = vertices.data[vertexParent].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+            for (Int32 edgeIndex = vertices.data[vertexParent].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
             {
                 Debug.Assert(edgeIndex >= 0 && edgeIndex < edgePoolChildren.count);
 
@@ -945,7 +945,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             string res = "";
 
 
-            for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)vertices.count; v < vCount; ++v)
             {
                 if (vertices.data[v].IsValid() == 0)
                 {
@@ -961,14 +961,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                 res += "v[" + v + "] = { ";
 
                 res += " children: { ";
-                for (Int16 e = vertices.data[v].childHead; e != -1; e = edgePoolChildren.data[e].next)
+                for (Int32 e = vertices.data[v].childHead; e != -1; e = edgePoolChildren.data[e].next)
                 {
                     res += edgePoolChildren.data[e].vertexIndex;
                     if (edgePoolChildren.data[e].next != -1) { res += ", "; }
                 }
 
                 res += "}, parents: { ";
-                for (Int16 e = vertices.data[v].parentHead; e != -1; e = edgePoolParents.data[e].next)
+                for (Int32 e = vertices.data[v].parentHead; e != -1; e = edgePoolParents.data[e].next)
                 {
                     res += edgePoolParents.data[e].vertexIndex;
                     if (edgePoolParents.data[e].next != -1) { res += ", "; }
@@ -985,8 +985,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         public void PushDirectedGraph(ref DirectedGraph<PayloadT, PayloadSerializableT> src, Allocator allocator)
         {
-            Int16 vertexCountNew = (Int16)(vertices.count + (src.vertices.count - src.verticesFreeHoleCount));
-            Int16 edgeCountNew = (Int16)(edgePoolParents.count + (src.edgePoolParents.count - src.edgePoolParentsFreeHoleCount));
+            Int32 vertexCountNew = (Int32)(vertices.count + (src.vertices.count - src.verticesFreeHoleCount));
+            Int32 edgeCountNew = (Int32)(edgePoolParents.count + (src.edgePoolParents.count - src.edgePoolParentsFreeHoleCount));
 
             vertices.Ensure(vertexCountNew, allocator);
             edgePoolParents.Ensure(edgeCountNew, allocator);
@@ -996,9 +996,9 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             // Vertices from source graph will be appended onto the end of the current vertex array,
             // therefore, their new indices will be their old indices, offset by the count before appending.
-            Int16 vertexOffset = (Int16)vertices.count;
+            Int32 vertexOffset = (Int32)vertices.count;
 
-            for (Int16 v = 0, vCount = (Int16)src.vertices.count, vNew = vertexOffset; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)src.vertices.count, vNew = vertexOffset; v < vCount; ++v)
             {
                 DirectedVertex vertex = src.vertices.data[v];
                 if (vertex.IsValid() == 0) { continue; }
@@ -1009,20 +1009,20 @@ namespace Pastasfuture.SplineGraph.Runtime
                 ++vNew;
             }
 
-            for (Int16 v = 0, vCount = (Int16)src.vertices.count, vNew = vertexOffset; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)src.vertices.count, vNew = vertexOffset; v < vCount; ++v)
             {
                 DirectedVertex vertex = src.vertices.data[v];
                 if (vertex.IsValid() == 0) { continue; }
 
-                for (Int16 edgeIndex = src.vertices.data[v].childHead; edgeIndex != -1; edgeIndex = src.edgePoolChildren.data[edgeIndex].next)
+                for (Int32 edgeIndex = src.vertices.data[v].childHead; edgeIndex != -1; edgeIndex = src.edgePoolChildren.data[edgeIndex].next)
                 {
                     DirectedEdge edge = src.edgePoolChildren.data[edgeIndex];
                     Debug.Assert(edge.IsValid() == 1);
 
-                    Int16 vChildNew = (Int16)(vertexOffset + edge.vertexIndex);
+                    Int32 vChildNew = (Int32)(vertexOffset + edge.vertexIndex);
 
                     // Scan account for invalid spaces that were compacted:
-                    for (Int16 vp = 0; vp < edge.vertexIndex; ++vp)
+                    for (Int32 vp = 0; vp < edge.vertexIndex; ++vp)
                     {
                         DirectedVertex vertexPrevious = src.vertices.data[vp];
                         if (vertexPrevious.IsValid() == 0) { --vChildNew; }
@@ -1038,8 +1038,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             res.Clear();
 
-            Int16 vertexCountCompact = (Int16)(vertices.count - verticesFreeHoleCount);
-            Int16 edgeCountCompact = (Int16)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
+            Int32 vertexCountCompact = (Int32)(vertices.count - verticesFreeHoleCount);
+            Int32 edgeCountCompact = (Int32)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
 
             res.vertices.Ensure(vertexCountCompact, allocator);
             res.edgePoolParents.Ensure(edgeCountCompact, allocator);
@@ -1053,7 +1053,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // then loop through again and add all edges.
             // This is another example of how automatically updating edge data on EdgeAdd() calls has complicated things.
             // Would it have been better to simply avoid dirty tracking?
-            for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
                 if (vertex.IsValid() == 0)
@@ -1062,11 +1062,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                     continue;
                 }
 
-                Int16 vNew = res.VertexAdd(allocator);
+                Int32 vNew = res.VertexAdd(allocator);
                 res.payload.VertexCopy(ref payload, v, ref res.payload, vNew);
             }
 
-            for (Int16 v = 0, vCount = (Int16)vertices.count, vNew = 0; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)vertices.count, vNew = 0; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
                 if (vertex.IsValid() == 0)
@@ -1077,18 +1077,18 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 // Add all child edges.
                 // Because we are going through the EdgeAdd() function, all parent edges will be implicitly added at this time as well.
-                for (Int16 edgeIndex = vertices.data[v].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+                for (Int32 edgeIndex = vertices.data[v].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
                 {
                     DirectedEdge edge = edgePoolChildren.data[edgeIndex];
 
-                    Int16 vChildNew = edge.vertexIndex;
+                    Int32 vChildNew = edge.vertexIndex;
 
                     Debug.Assert(vChildNew >= 0 && vChildNew < vertices.count);
 
                     // Scan to see how many vertex holes exist between {0, vChildNew - 1} and update index of vChildNew to account for compaction.
                     // This of course makes compaction like this slow.
                     // If we encounter any situations where we want to run compaction at runtime, this data structure should be revisited.
-                    for (Int16 v1 = (Int16)0, v1Count = vChildNew; v1 < v1Count; ++v1)
+                    for (Int32 v1 = (Int32)0, v1Count = vChildNew; v1 < v1Count; ++v1)
                     {
                         if (vertices.data[v1].IsValid() == 0)
                         {
@@ -1109,8 +1109,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             res.Clear();
 
-            Int16 vertexCountCompact = (Int16)(vertices.count - verticesFreeHoleCount);
-            Int16 edgeCountCompact = (Int16)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
+            Int32 vertexCountCompact = (Int32)(vertices.count - verticesFreeHoleCount);
+            Int32 edgeCountCompact = (Int32)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
 
             res.vertices.Ensure(vertexCountCompact, allocator);
             res.edgePoolParents.Ensure(edgeCountCompact, allocator);
@@ -1124,7 +1124,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // then loop through again and add all edges.
             // This is another example of how automatically updating edge data on EdgeAdd() calls has complicated things.
             // Would it have been better to simply avoid dirty tracking?
-            for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
                 if (vertex.IsValid() == 0)
@@ -1133,11 +1133,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                     continue;
                 }
 
-                Int16 vNew = res.VertexAdd(allocator);
+                Int32 vNew = res.VertexAdd(allocator);
                 res.payload.VertexCopy(ref payload, v, ref res.payload, vNew);
             }
 
-            for (Int16 v = 0, vCount = (Int16)vertices.count, vNew = 0; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)vertices.count, vNew = 0; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
                 if (vertex.IsValid() == 0)
@@ -1148,18 +1148,18 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 // Add all child edges.
                 // Because we are going through the EdgeAdd() function, all parent edges will be implicitly added at this time as well.
-                for (Int16 edgeIndex = vertices.data[v].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
+                for (Int32 edgeIndex = vertices.data[v].childHead; edgeIndex != -1; edgeIndex = edgePoolChildren.data[edgeIndex].next)
                 {
                     DirectedEdge edge = edgePoolChildren.data[edgeIndex];
 
-                    Int16 vChildNew = edge.vertexIndex;
+                    Int32 vChildNew = edge.vertexIndex;
 
                     Debug.Assert(vChildNew >= 0 && vChildNew < vertices.count);
 
                     // Scan to see how many vertex holes exist between {0, vChildNew - 1} and update index of vChildNew to account for compaction.
                     // This of course makes compaction like this slow.
                     // If we encounter any situations where we want to run compaction at runtime, this data structure should be revisited.
-                    for (Int16 v1 = (Int16)0, v1Count = vChildNew; v1 < v1Count; ++v1)
+                    for (Int32 v1 = (Int32)0, v1Count = vChildNew; v1 < v1Count; ++v1)
                     {
                         if (vertices.data[v1].IsValid() == 0)
                         {
@@ -1183,10 +1183,10 @@ namespace Pastasfuture.SplineGraph.Runtime
         //     SplineGraph.DebugRunTests();
         //     // SplineGraph splineGraph = new SplineGraph(Allocator.Temp);
 
-        //     // Int16 a = splineGraph.VertexAdd(Allocator.Temp);
-        //     // Int16 b = splineGraph.VertexAdd(Allocator.Temp);
-        //     // Int16 c = splineGraph.VertexAdd(Allocator.Temp);
-        //     // Int16 d = splineGraph.VertexAdd(Allocator.Temp);
+        //     // Int32 a = splineGraph.VertexAdd(Allocator.Temp);
+        //     // Int32 b = splineGraph.VertexAdd(Allocator.Temp);
+        //     // Int32 c = splineGraph.VertexAdd(Allocator.Temp);
+        //     // Int32 d = splineGraph.VertexAdd(Allocator.Temp);
 
         //     // splineGraph.positions.data[a] = new float3(0.0f, 0.0f, 0.0f);
         //     // splineGraph.positions.data[b] = new float3(1.0f, 1.0f, 1.0f);
@@ -1218,10 +1218,10 @@ namespace Pastasfuture.SplineGraph.Runtime
         // {
         //     DirectedGraph graph = new DirectedGraph(Allocator.Temp);
 
-        //     Int16 a = graph.VertexAdd(Allocator.Temp);
-        //     Int16 b = graph.VertexAdd(Allocator.Temp);
-        //     Int16 c = graph.VertexAdd(Allocator.Temp);
-        //     Int16 d = graph.VertexAdd(Allocator.Temp);
+        //     Int32 a = graph.VertexAdd(Allocator.Temp);
+        //     Int32 b = graph.VertexAdd(Allocator.Temp);
+        //     Int32 c = graph.VertexAdd(Allocator.Temp);
+        //     Int32 d = graph.VertexAdd(Allocator.Temp);
 
         //     // NativeArrayDynamic<int> buffer = new NativeArrayDynamic<int>(4, Allocator.Persistent);
         //     // Debug.Log(buffer.DebugString());

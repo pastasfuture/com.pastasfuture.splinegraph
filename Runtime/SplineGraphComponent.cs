@@ -96,11 +96,11 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         #if UNITY_EDITOR
-        public Int16 VertexAdd(float3 position, quaternion rotation, float2 scale, float2 leash)
+        public Int32 VertexAdd(float3 position, quaternion rotation, float2 scale, float2 leash)
         {
             Verify();
 
-            Int16 vertexIndex = splineGraph.VertexAdd(Allocator.Persistent);
+            Int32 vertexIndex = splineGraph.VertexAdd(Allocator.Persistent);
 
             splineGraph.payload.positions.data[vertexIndex] = position;
             splineGraph.payload.rotations.data[vertexIndex] = rotation;
@@ -110,28 +110,28 @@ namespace Pastasfuture.SplineGraph.Runtime
             return vertexIndex;
         }
 
-        public void VertexRemove(Int16 vertexIndex)
+        public void VertexRemove(Int32 vertexIndex)
         {
             Verify();
 
             splineGraph.VertexRemove(vertexIndex);
         }
 
-        public void EdgeAdd(Int16 vertexParent, Int16 vertexChild)
+        public void EdgeAdd(Int32 vertexParent, Int32 vertexChild)
         {
             Verify();
 
             splineGraph.EdgeAdd(vertexParent, vertexChild, Allocator.Persistent);
         }
 
-        public void EdgeRemove(Int16 vertexParent, Int16 vertexChild)
+        public void EdgeRemove(Int32 vertexParent, Int32 vertexChild)
         {
             Verify();
 
             splineGraph.EdgeRemove(vertexParent, vertexChild);
         }
 
-        public void VertexMerge(Int16 vertexParent, Int16 vertexChild)
+        public void VertexMerge(Int32 vertexParent, Int32 vertexChild)
         {
             Verify();
 
@@ -180,7 +180,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             Handles.color = Color.white;
             Handles.matrix = splineGraphTransform.localToWorldMatrix;
 
-            for (Int16 v = 0, vCount = (Int16)splineGraph.vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)splineGraph.vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = splineGraph.vertices.data[v];
                 if (vertex.IsValid() == 0) { continue; }
@@ -193,8 +193,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                     const float HANDLE_DISPLAY_SIZE = 0.05f;
                     handleSize *= HANDLE_DISPLAY_SIZE;
 
-                    Int16 parentCount = splineGraph.VertexComputeParentCount(v);
-                    Int16 childCount = splineGraph.VertexComputeChildCount(v);
+                    Int32 parentCount = splineGraph.VertexComputeParentCount(v);
+                    Int32 childCount = splineGraph.VertexComputeChildCount(v);
 
                     if (parentCount > 0 && childCount > 0)
                     {
@@ -234,7 +234,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
 
                 Handles.color = Color.white;
-                for (Int16 e = vertex.childHead; e != -1; e = splineGraph.edgePoolChildren.data[e].next)
+                for (Int32 e = vertex.childHead; e != -1; e = splineGraph.edgePoolChildren.data[e].next)
                 {
                     DirectedEdge edge = splineGraph.edgePoolChildren.data[e];
 
@@ -313,7 +313,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             Edge = 1
         };
         private SelectionType selectionType = SelectionType.Vertex;
-        private List<Int16> selectedIndices = new List<Int16>();
+        private List<Int32> selectedIndices = new List<Int32>();
 
         private enum DragRectState
         {
@@ -363,14 +363,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float2 scale = new float2(1.0f, 1.0f);
                 float2 leash = new float2(0.0f, 0.0f);
 
-                Int16 vertexIndex = sgc.VertexAdd(position, rotation, scale, leash);
+                Int32 vertexIndex = sgc.VertexAdd(position, rotation, scale, leash);
 
                 // If vertices are selected, make them the parents of the new vertex.
                 if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 0))
                 {
-                    for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                    for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                     {
-                        Int16 vertexParent = selectedIndices[i];
+                        Int32 vertexParent = selectedIndices[i];
 
                         sgc.EdgeAdd(vertexParent, vertexIndex);
                     }
@@ -389,10 +389,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     sgc.UndoRecord("Spline Graph Edge(s) Add", true);
 
-                    Int16 vertexParent = selectedIndices[0];
-                    for (Int16 i = 1, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                    Int32 vertexParent = selectedIndices[0];
+                    for (Int32 i = 1, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                     {
-                        Int16 vertexChild = selectedIndices[i];
+                        Int32 vertexChild = selectedIndices[i];
 
                         sgc.EdgeAdd(vertexParent, vertexChild);
                     }
@@ -405,10 +405,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     sgc.UndoRecord("Spline Graph Vertices Merge", true);
 
-                    Int16 vertexParent = selectedIndices[0];
-                    for (Int16 i = 1, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                    Int32 vertexParent = selectedIndices[0];
+                    for (Int32 i = 1, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                     {
-                        Int16 vertexChild = selectedIndices[i];
+                        Int32 vertexChild = selectedIndices[i];
 
                         sgc.VertexMerge(vertexParent, vertexChild);
                     }
@@ -449,7 +449,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 selectedIndices.Clear();
 
-                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                for (Int32 v = 0, vCount = (Int32)sgc.splineGraph.vertices.count; v < vCount; ++v)
                 {
                     DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
                     if (vertex.IsValid() == 0) { continue; }
@@ -474,7 +474,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 float3 positionAverage = float3.zero;
                 int positionAverageCount = 0;
-                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                for (Int32 v = 0, vCount = (Int32)sgc.splineGraph.vertices.count; v < vCount; ++v)
                 {
                     DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
                     if (vertex.IsValid() == 0) { continue; }
@@ -487,7 +487,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     positionAverage /= (float)positionAverageCount;
                     
-                    for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                    for (Int32 v = 0, vCount = (Int32)sgc.splineGraph.vertices.count; v < vCount; ++v)
                     {
                         DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
                         if (vertex.IsValid() == 0) { continue; }
@@ -503,10 +503,10 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             EditorGUILayout.EndVertical();
 
-            Int16 indexAdd = -1;
-            Int16 indexRemove = -1;
+            Int32 indexAdd = -1;
+            Int32 indexRemove = -1;
             Color styleTextColorPrevious = EditorStyles.label.normal.textColor;
-            for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)sgc.splineGraph.vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
                 if (vertex.IsValid() == 0) { continue; }
@@ -515,7 +515,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 {
                     for (int i = 0, iLen = selectedIndices.Count; i < iLen; ++i)
                     {
-                        Int16 selectedIndex = selectedIndices[i];
+                        Int32 selectedIndex = selectedIndices[i];
                         if (selectedIndex == v)
                         {
                             // Current vertex is selected. Change style in GUI.
@@ -603,7 +603,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     // TODO: Compute average parent position and use negation of that for offset.
                     float3 positionOffset = new float3(0.0f, 0.0f, 1.0f);
 
-                    Int16 vertexChild = sgc.VertexAdd(positionParent + positionOffset, rotationParent, scaleParent, leashParent);
+                    Int32 vertexChild = sgc.VertexAdd(positionParent + positionOffset, rotationParent, scaleParent, leashParent);
                     sgc.EdgeAdd(indexAdd, vertexChild);
 
                     // Select point after adding for convenience, as typical use is add point, move, add point, move, etc.
@@ -621,7 +621,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     // Deselect vertex we are removing.
                     if ((selectedIndices.Count > 0) && (selectionType == SelectionType.Vertex))
                     {
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                         {
                             if (selectedIndices[i] == indexRemove)
                             {
@@ -680,9 +680,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                     sgc.UndoRecord("Spline Graph Vertex Remove", true);
                     Event.current.Use();
 
-                    for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                    for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                     {
-                        Int16 selectedVertexIndex = selectedIndices[i];
+                        Int32 selectedVertexIndex = selectedIndices[i];
 
                         sgc.VertexRemove(selectedVertexIndex);
                     }
@@ -701,9 +701,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float3 rotationOffsetOriginOS = new float3(0.0f, 0.0f, 0.0f);
                 float2 scaleOffsetOS = new float2(1.0f, 1.0f);
                 float2 leashOffsetOS = new float2(0.0f, 0.0f);
-                for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                 {
-                    Int16 selectedVertexIndex = selectedIndices[i];
+                    Int32 selectedVertexIndex = selectedIndices[i];
 
                     float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
                     quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
@@ -790,9 +790,9 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                             isExtruding = true;
 
-                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                             {
-                                Int16 selectedVertexIndex = selectedIndices[i];
+                                Int32 selectedVertexIndex = selectedIndices[i];
 
                                 float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
                                 vertexPositionOS = transform.TransformPoint(vertexPositionOS);
@@ -803,7 +803,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                                 float2 scaleParent = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
                                 float2 leashParent = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
 
-                                Int16 selectedVertexChildIndex = sgc.VertexAdd(vertexPositionOS, rotationParent, scaleParent, leashParent);
+                                Int32 selectedVertexChildIndex = sgc.VertexAdd(vertexPositionOS, rotationParent, scaleParent, leashParent);
                                 sgc.EdgeAdd(selectedVertexIndex, selectedVertexChildIndex);
 
                                 // Update the selection to the new child vertex instead of the parent.
@@ -823,9 +823,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                                 sgc.UndoRecord("Edited Spline Graph Vertex Position", true);
                             }
                             
-                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                             {
-                                Int16 selectedVertexIndex = selectedIndices[i];
+                                Int32 selectedVertexIndex = selectedIndices[i];
 
                                 float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
                                 vertexPositionOS = transform.TransformPoint(vertexPositionOS);
@@ -834,7 +834,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                                 sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
                             }
 
-                            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                            for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                             {
                                 sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
                             }
@@ -845,16 +845,16 @@ namespace Pastasfuture.SplineGraph.Runtime
                     {
                         sgc.UndoRecord("Edited Spline Graph Vertex Rotation");
 
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                         {
-                            Int16 selectedVertexIndex = selectedIndices[i];
+                            Int32 selectedVertexIndex = selectedIndices[i];
 
                             quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
                             vertexRotationOS = math.mul(rotationOffsetOS, vertexRotationOS);
                             sgc.splineGraph.payload.rotations.data[selectedVertexIndex] = vertexRotationOS;
                         }
 
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                         {
                             sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
                         }
@@ -864,9 +864,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                     {
                         sgc.UndoRecord("Edited Spline Graph Vertex Scale");
 
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                         {
-                            Int16 selectedVertexIndex = selectedIndices[i];
+                            Int32 selectedVertexIndex = selectedIndices[i];
 
                             float2 vertexScaleOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
                             vertexScaleOS *= scaleOffsetOS;
@@ -877,7 +877,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                             sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = vertexLeashOS;
                         }
 
-                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        for (Int32 i = 0, iCount = (Int32)selectedIndices.Count; i < iCount; ++i)
                         {
                             sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
                         }
@@ -894,7 +894,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // Select vertex(s).
             if (dragRectState == DragRectState.None)
             {
-                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                for (Int32 v = 0, vCount = (Int32)sgc.splineGraph.vertices.count; v < vCount; ++v)
                 {
                     DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
                     if (vertex.IsValid() == 0) { continue; }

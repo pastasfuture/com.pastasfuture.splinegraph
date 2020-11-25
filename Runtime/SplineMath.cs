@@ -652,7 +652,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             public float t;
             public UInt32 packed;
 
-            public SplineGraphFollowState(float t, Int16 edgeIndex, int isComplete, int isReverse)
+            public SplineGraphFollowState(float t, Int32 edgeIndex, int isComplete, int isReverse)
             {
                 this.t = t;
                 this.packed =
@@ -661,10 +661,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                     | ((UInt32)(Int32)edgeIndex);
             }
 
-            public Int16 DecodeEdgeIndex()
+            public Int32 DecodeEdgeIndex()
             {
                 UInt32 mask = (UInt32)(1 << 16) - 1;
-                return (Int16)(packed & mask);
+                return (Int32)(packed & mask);
             }
 
             public int DecodeIsComplete()
@@ -696,7 +696,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static void FindTFromClosestPointOnSplineGraph(
             out float t,
             out float d,
-            out Int16 edgeIndex,
+            out Int32 edgeIndex,
             int isReverse,
             float3 point,
             NativeArray<DirectedVertex> vertices,
@@ -709,12 +709,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             t = 0.0f;
             d = float.MaxValue;
             edgeIndex = -1;
-            for (Int16 v = 0; v < verticesCount; ++v)
+            for (Int32 v = 0; v < verticesCount; ++v)
             {
                 DirectedVertex vertex = vertices[v];
                 if (vertex.IsValid() == 0) { continue; }
 
-                for (Int16 edgeIndexCurrent = vertex.childHead;
+                for (Int32 edgeIndexCurrent = vertex.childHead;
                     edgeIndexCurrent != -1;
                     edgeIndexCurrent = edgesParentToChild[edgeIndexCurrent].next)
                 {
@@ -743,7 +743,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static void FindTFromClosestPointOnSplineGraph(
             out float t,
             out float d,
-            out Int16 edgeIndex,
+            out Int32 edgeIndex,
             int isReverse,
             float3 point,
             float distanceThresholdMin,
@@ -758,7 +758,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 out t,
                 out d,
                 out edgeIndex,
-                out Int16 vertexIndexUnused,
+                out Int32 vertexIndexUnused,
                 isReverse,
                 point,
                 distanceThresholdMin,
@@ -776,8 +776,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static void FindTFromClosestPointOnSplineGraph(
             out float t,
             out float d,
-            out Int16 edgeIndex,
-            out Int16 vertexIndex,
+            out Int32 edgeIndex,
+            out Int32 vertexIndex,
             int isReverse,
             float3 point,
             float distanceThresholdMin,
@@ -792,12 +792,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             d = float.MaxValue;
             edgeIndex = -1;
             vertexIndex = -1;
-            for (Int16 v = 0; v < verticesCount; ++v)
+            for (Int32 v = 0; v < verticesCount; ++v)
             {
                 DirectedVertex vertex = vertices[v];
                 if (vertex.IsValid() == 0) { continue; }
 
-                for (Int16 edgeIndexCurrent = vertex.childHead;
+                for (Int32 edgeIndexCurrent = vertex.childHead;
                     edgeIndexCurrent != -1;
                     edgeIndexCurrent = edgesParentToChild[edgeIndexCurrent].next)
                 {
@@ -831,7 +831,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static void FindTFromClosestPointOnSplineGraphEdge(
             out float t,
             out float d,
-            Int16 edgeIndex,
+            Int32 edgeIndex,
             float3 point,
             float distanceThresholdMin,
             float distanceThresholdMax,
@@ -880,9 +880,9 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static void FindTFromClosestPointOnSplineGraphNeighborhood(
             out float t,
             out float d,
-            out Int16 edgeIndex,
-            out Int16 vertexIndex,
-            Int16 edgeIndexNeighborhoodCenter,
+            out Int32 edgeIndex,
+            out Int32 vertexIndex,
+            Int32 edgeIndexNeighborhoodCenter,
             int isReverse,
             float3 point,
             float distanceThresholdMin,
@@ -899,16 +899,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeIndex = -1;
             vertexIndex = -1;
 
-            Int16 vertexIndexChild = edgesParentToChild[edgeIndexNeighborhoodCenter].vertexIndex;
+            Int32 vertexIndexChild = edgesParentToChild[edgeIndexNeighborhoodCenter].vertexIndex;
             DirectedVertex vertexChild = vertices[vertexIndexChild];
             Debug.Assert(vertexChild.IsValid() == 1);
 
-            Int16 vertexIndexParent = edgesChildToParent[edgeIndexNeighborhoodCenter].vertexIndex;
+            Int32 vertexIndexParent = edgesChildToParent[edgeIndexNeighborhoodCenter].vertexIndex;
             DirectedVertex vertexParent = vertices[vertexIndexParent];
             Debug.Assert(vertexParent.IsValid() == 1);
 
             // First: Check the neighborhood center edge.
-            Int16 edgeIndexCurrent = edgeIndexNeighborhoodCenter;
+            Int32 edgeIndexCurrent = edgeIndexNeighborhoodCenter;
             {
                 FindTFromClosestPointOnSplineGraphEdge(
                     out float currentT,
@@ -998,7 +998,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             int isComplete = state.DecodeIsComplete();
             if (isComplete != 0) { return; }
             int isReverse = state.DecodeIsReverse();
-            Int16 edgeIndex = state.DecodeEdgeIndex();
+            Int32 edgeIndex = state.DecodeEdgeIndex();
             NativeArray<DirectedEdge> edges = (isReverse == 0) ? edgesParentToChild : edgesChildToParent;
             NativeArray<DirectedEdge> edgesBackward = (isReverse == 0) ? edgesChildToParent : edgesParentToChild;
 
@@ -1007,12 +1007,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 t += 1.0f;
 
-                Int16 vertexIndex = edgesBackward[edgeIndex].vertexIndex;
+                Int32 vertexIndex = edgesBackward[edgeIndex].vertexIndex;
                 DirectedVertex vertex = vertices[vertexIndex];
 
                 // TODO: Precompute and store edge count?
                 int edgeCount = 0;
-                for (Int16 edgeIndexNext = (isReverse == 0) ? vertex.parentHead : vertex.childHead;
+                for (Int32 edgeIndexNext = (isReverse == 0) ? vertex.parentHead : vertex.childHead;
                     edgeIndexNext != -1;
                     edgeIndexNext = edgesBackward[edgeIndexNext].next)
                 {
@@ -1031,7 +1031,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 int edgeSelectIndex = (int)math.floor(((float)edgeCount - 1.0f) * randomSample + 0.5f);
 
                 edgeCount = 0;
-                for (Int16 edgeIndexNext = (isReverse == 0) ? vertex.parentHead : vertex.childHead;
+                for (Int32 edgeIndexNext = (isReverse == 0) ? vertex.parentHead : vertex.childHead;
                     edgeIndexNext != -1;
                     edgeIndexNext = edgesBackward[edgeIndexNext].next)
                 {
@@ -1048,12 +1048,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 t -= 1.0f;
 
-                Int16 vertexIndex = edges[edgeIndex].vertexIndex;
+                Int32 vertexIndex = edges[edgeIndex].vertexIndex;
                 DirectedVertex vertex = vertices[vertexIndex];
 
                 // TODO: Precompute and store edge count?
                 int edgeCount = 0;
-                for (Int16 edgeIndexNext = (isReverse == 0) ? vertex.childHead : vertex.parentHead;
+                for (Int32 edgeIndexNext = (isReverse == 0) ? vertex.childHead : vertex.parentHead;
                     edgeIndexNext != -1;
                     edgeIndexNext = edges[edgeIndexNext].next)
                 {
@@ -1072,7 +1072,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 int edgeSelectIndex = (int)math.floor(((float)edgeCount - 1.0f) * randomSample + 0.5f);
 
                 edgeCount = 0;
-                for (Int16 edgeIndexNext = (isReverse == 0) ? vertex.childHead : vertex.parentHead;
+                for (Int32 edgeIndexNext = (isReverse == 0) ? vertex.childHead : vertex.parentHead;
                     edgeIndexNext != -1;
                     edgeIndexNext = edges[edgeIndexNext].next)
                 {
@@ -1103,7 +1103,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             int isComplete = state.DecodeIsComplete();
             if (isComplete == 1) { return; }
             int isReverse = state.DecodeIsReverse();
-            Int16 edgeIndex = state.DecodeEdgeIndex();
+            Int32 edgeIndex = state.DecodeEdgeIndex();
             Spline spline = (isReverse == 0) ? splinesParentToChild[edgeIndex] : splinesChildToParent[edgeIndex];
             state = new SplineGraphFollowState(ComputeTFromDelta(spline, state.t, delta), edgeIndex, isComplete, isReverse);
 

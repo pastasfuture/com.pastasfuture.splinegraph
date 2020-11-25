@@ -102,8 +102,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                 : splineGraphManager.GetSplineGraph();
 
             // First, go through and compute the number of vertex ring subdivisions required to represent the spline graph based on curvature.
-            Int16 vertexIsValidCount = splineGraph.ComputeVertexIsValidCount();
-            Int16 edgeIsValidCount = splineGraph.ComputeEdgeIsValidCount();
+            Int32 vertexIsValidCount = splineGraph.ComputeVertexIsValidCount();
+            Int32 edgeIsValidCount = splineGraph.ComputeEdgeIsValidCount();
 
             int[] edgeSubdivisionIndex = new int[splineGraph.edgePoolChildren.count];
             int[] edgeSubdivisionCount = new int[splineGraph.edgePoolChildren.count];
@@ -111,7 +111,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             int meshRingCountTotal = 0;
 
             
-            for (Int16 edgeIndex = 0; edgeIndex < splineGraph.edgePoolChildren.count; ++edgeIndex)
+            for (Int32 edgeIndex = 0; edgeIndex < splineGraph.edgePoolChildren.count; ++edgeIndex)
             {
                 DirectedEdge edge = splineGraph.edgePoolChildren.data[edgeIndex];
                 if (edge.IsValid() == 0) { continue; }
@@ -135,13 +135,13 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             int meshVertexIndex = 0;
             int meshTriangleIndex = 0;
-            for (Int16 edgeIndex = 0; edgeIndex < splineGraph.edgePoolChildren.count; ++edgeIndex)
+            for (Int32 edgeIndex = 0; edgeIndex < splineGraph.edgePoolChildren.count; ++edgeIndex)
             {
                 DirectedEdge edge = splineGraph.edgePoolChildren.data[edgeIndex];
                 if (edge.IsValid() == 0) { continue; }
 
-                Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
-                Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
+                Int32 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
+                Int32 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
 
                 SplineMath.Spline spline = splineGraph.payload.edgeParentToChildSplines.data[edgeIndex];
                 float splineLength = splineGraph.payload.edgeLengths.data[edgeIndex];
@@ -165,8 +165,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                 Debug.Assert(vertexChild.IsValid() == 1);
 
                 // bool edgeHasSibling = false;
-                // Int16 edgeIndexSibling = -1;
-                // Int16 siblingVertexIndexChild = -1;
+                // Int32 edgeIndexSibling = -1;
+                // Int32 siblingVertexIndexChild = -1;
                 // SplineMath.Spline splineSibling = SplineMath.Spline.zero;
                 // SplineMath.Spline splineLeashSibling = SplineMath.Spline.zero;
                 // quaternion siblingRotationChild = quaternion.identity;
@@ -294,7 +294,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                         {
                             if (!ringIntersectsSibling)
                             {
-                                for (Int16 edgeIndexSibling = vertexParent.childHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling].next)
+                                for (Int32 edgeIndexSibling = vertexParent.childHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling].next)
                                 {
                                     DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
                                     Debug.Assert(edgeSibling.IsValid() == 1);
@@ -306,10 +306,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                                     }
 
                                     // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
-                                    Int16 siblingVertexIndexChild = edgeSibling.vertexIndex;
+                                    Int32 siblingVertexIndexChild = edgeSibling.vertexIndex;
                                     Debug.Assert(siblingVertexIndexChild != -1);
 
-                                    Int16 siblingVertexIndexParent = splineGraph.edgePoolParents.data[edgeIndexSibling].vertexIndex;
+                                    Int32 siblingVertexIndexParent = splineGraph.edgePoolParents.data[edgeIndexSibling].vertexIndex;
                                     Debug.Assert(siblingVertexIndexParent != -1);
 
                                     SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
@@ -333,7 +333,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                             if (!ringIntersectsSibling)
                             {
-                                for (Int16 edgeIndexSibling = vertexChild.parentHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolParents.data[edgeIndexSibling].next)
+                                for (Int32 edgeIndexSibling = vertexChild.parentHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolParents.data[edgeIndexSibling].next)
                                 {
                                     DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
                                     Debug.Assert(edgeSibling.IsValid() == 1);
@@ -345,10 +345,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                                     }
 
                                     // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
-                                    Int16 siblingVertexIndexParent = edgeSibling.vertexIndex;
+                                    Int32 siblingVertexIndexParent = edgeSibling.vertexIndex;
                                     Debug.Assert(siblingVertexIndexParent != -1);
 
-                                    Int16 siblingVertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndexSibling].vertexIndex;
+                                    Int32 siblingVertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndexSibling].vertexIndex;
                                     Debug.Assert(siblingVertexIndexChild != -1);
 
                                     SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];

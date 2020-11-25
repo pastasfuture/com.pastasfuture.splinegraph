@@ -120,7 +120,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             Verify();
 
-            for (Int16 v0 = 0, v0Count = (Int16)splineGraph.vertices.count; v0 < v0Count; ++v0)
+            for (Int32 v0 = 0, v0Count = (Int32)splineGraph.vertices.count; v0 < v0Count; ++v0)
             {
                 DirectedVertex vertex0 = splineGraph.vertices.data[v0];
                 if (vertex0.IsValid() == 0) { continue; }
@@ -130,7 +130,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float2 scaleParent = splineGraph.payload.scales.data[v0];
                 float2 leashParent = splineGraph.payload.leashes.data[v0];
 
-                for (Int16 v1 = (Int16)(v0 + 1); v1 < v0Count; ++v1)
+                for (Int32 v1 = (Int32)(v0 + 1); v1 < v0Count; ++v1)
                 {
                     DirectedVertex vertex1 = splineGraph.vertices.data[v1];
                     if (vertex1.IsValid() == 0) { continue; }
@@ -208,7 +208,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             Verify();
 
-            for (Int16 v0 = 0, v0Count = (Int16)splineGraph.vertices.count; v0 < v0Count; ++v0)
+            for (Int32 v0 = 0, v0Count = (Int32)splineGraph.vertices.count; v0 < v0Count; ++v0)
             {
                 DirectedVertex vertex0 = splineGraph.vertices.data[v0];
                 if (vertex0.IsValid() == 0) { continue; }
@@ -217,22 +217,22 @@ namespace Pastasfuture.SplineGraph.Runtime
                 // vertex0 -------------------> vertex0Child -------------------> vertex0ChildChild
                 // where vertex0, and vertex0Child only have 1 child and vertex0 -> vertex0Child -> vertex0ChildChild describes a straight line.
 
-                Int16 vertex0ChildCount = splineGraph.VertexComputeChildCount(v0);
+                Int32 vertex0ChildCount = splineGraph.VertexComputeChildCount(v0);
                 if (vertex0ChildCount != 1) { continue; }
 
-                Int16 vertex0ChildIndex = splineGraph.edgePoolChildren.data[vertex0.childHead].vertexIndex;
+                Int32 vertex0ChildIndex = splineGraph.edgePoolChildren.data[vertex0.childHead].vertexIndex;
                 Debug.Assert(vertex0ChildIndex >= 0 && vertex0ChildIndex < v0Count);
                 DirectedVertex vertex0Child = splineGraph.vertices.data[vertex0ChildIndex];
                 Debug.Assert(vertex0Child.IsValid() == 1);
 
-                Int16 vertex0ChildChildCount = splineGraph.VertexComputeChildCount(vertex0ChildIndex);
+                Int32 vertex0ChildChildCount = splineGraph.VertexComputeChildCount(vertex0ChildIndex);
                 if (vertex0ChildChildCount != 1) { continue; }
-                Int16 vertex0ChildParentCount = splineGraph.VertexComputeParentCount(vertex0ChildIndex);
+                Int32 vertex0ChildParentCount = splineGraph.VertexComputeParentCount(vertex0ChildIndex);
                 if (vertex0ChildParentCount != 1) { continue; }
 
                 // We have now verified that vertex0 -> vertex0Child -> vertex0ChildChild describe a single path.
                 // Now need to verify that this path is a straight line.
-                Int16 vertex0ChildChildIndex = splineGraph.edgePoolChildren.data[vertex0Child.childHead].vertexIndex;
+                Int32 vertex0ChildChildIndex = splineGraph.edgePoolChildren.data[vertex0Child.childHead].vertexIndex;
                 Debug.Assert(vertex0ChildChildIndex >= 0 && vertex0ChildChildIndex < v0Count);
                 DirectedVertex vertex0ChildChild = splineGraph.vertices.data[vertex0ChildChildIndex];
                 Debug.Assert(vertex0ChildChild.IsValid() == 1);
@@ -329,13 +329,13 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                 if (instance.type != type) { continue; }
 
-                Int16 vertexStart = (Int16)splineGraph.vertices.count;
+                Int32 vertexStart = (Int32)splineGraph.vertices.count;
                 splineGraph.PushDirectedGraph(ref instance.splineGraph, Allocator.Persistent);
-                Int16 vertexEnd = (Int16)splineGraph.vertices.count;
+                Int32 vertexEnd = (Int32)splineGraph.vertices.count;
 
                 // Transform vertices into splineGraphManager's coordinate system:
                 Transform instanceTransform = instance.GetComponent<Transform>();
-                for (Int16 v = vertexStart; v < vertexEnd; ++v)
+                for (Int32 v = vertexStart; v < vertexEnd; ++v)
                 {
                     float3 position = splineGraph.payload.positions.data[v];
                     quaternion rotation = splineGraph.payload.rotations.data[v];
@@ -375,7 +375,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     splineGraph.payload.scales.data[v] = scale;
                     splineGraph.payload.leashes.data[v] = leash;
                 }
-                for (Int16 v = vertexStart; v < vertexEnd; ++v)
+                for (Int32 v = vertexStart; v < vertexEnd; ++v)
                 {
                     splineGraph.payload.VertexComputePayloads(ref splineGraph, v);
                 }
@@ -431,7 +431,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 SplineMath.FindTFromClosestPointOnSplineGraph(
                     out float t,
                     out float d,
-                    out Int16 edgeIndex,
+                    out Int32 edgeIndex,
                     isReverse,
                     debugPosition,
                     splineGraph.vertices.data,
@@ -555,7 +555,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 return;
             }
 
-            for (Int16 v = 0, vCount = (Int16)sgm.splineGraph.vertices.count; v < vCount; ++v)
+            for (Int32 v = 0, vCount = (Int32)sgm.splineGraph.vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = sgm.splineGraph.vertices.data[v];
                 if (vertex.IsValid() == 0) { continue; }
@@ -604,7 +604,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     SplineMath.SplineGraphFollowState state = sgm.debugFollowStates[i];
 
                     int isReverse = state.DecodeIsReverse();
-                    Int16 edgeIndex = state.DecodeEdgeIndex();
+                    Int32 edgeIndex = state.DecodeEdgeIndex();
                     float t = state.t;
                     SplineMath.Spline spline = (state.DecodeIsReverse() == 0)
                         ? sgm.splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]

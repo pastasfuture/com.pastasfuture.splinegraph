@@ -247,7 +247,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (; count < requestedCount; ++count)
             {
                 float t = UnityEngine.Random.value;
-                Int16 edgeIndex = (Int16)Mathf.FloorToInt((splineGraph.edgePoolChildren.data.Length - 1) * UnityEngine.Random.value + 0.5f);
+                Int32 edgeIndex = (Int32)Mathf.FloorToInt((splineGraph.edgePoolChildren.data.Length - 1) * UnityEngine.Random.value + 0.5f);
                 int isComplete = 0;
                 int isReverse = isTwoWayPathEnabled ? ((UnityEngine.Random.value >= 0.5f) ? 1 : 0) : 0;
                 followStates[count] = new SplineMath.SplineGraphFollowState(t, edgeIndex, isComplete, isReverse);
@@ -277,11 +277,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                         ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
                         : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
 
-                    Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
-                    Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
+                    Int32 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
+                    Int32 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
                     if (isReverse == 1)
                     {
-                        Int16 vertexIndexTemp = vertexIndexChild;
+                        Int32 vertexIndexTemp = vertexIndexChild;
                         vertexIndexChild = vertexIndexParent;
                         vertexIndexParent = vertexIndexTemp;
                     }
@@ -381,16 +381,16 @@ namespace Pastasfuture.SplineGraph.Runtime
                 followStates[i] = followState;
                 randoms[i] = random;
 
-                Int16 edgeIndex = followState.DecodeEdgeIndex();
+                Int32 edgeIndex = followState.DecodeEdgeIndex();
                 SplineMath.Spline spline = (followState.DecodeIsReverse() == 0)
                     ? splineGraph.payload.edgeParentToChildSplines.data[edgeIndex]
                     : splineGraph.payload.edgeChildToParentSplines.data[edgeIndex];
 
-                Int16 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
-                Int16 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
+                Int32 vertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndex].vertexIndex;
+                Int32 vertexIndexParent = splineGraph.edgePoolParents.data[edgeIndex].vertexIndex;
                 if (followState.DecodeIsReverse() == 1)
                 {
-                    Int16 vertexIndexTemp = vertexIndexChild;
+                    Int32 vertexIndexTemp = vertexIndexChild;
                     vertexIndexChild = vertexIndexParent;
                     vertexIndexParent = vertexIndexTemp;
                 }
