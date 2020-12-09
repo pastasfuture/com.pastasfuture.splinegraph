@@ -490,12 +490,14 @@ namespace Pastasfuture.SplineGraph.Runtime
         #endif
     }
 
-    #if UNITY_EDITOR
+#if UNITY_EDITOR
     [CustomEditor(typeof(SplineGraphManager))]
     public class SplineGraphManagerEditor : Editor
     {
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
+
             var sgm = target as SplineGraphManager;
             sgm.Verify();
 
@@ -580,6 +582,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
 
             EditorGUILayout.EndVertical();
+
+            serializedObject.ApplyModifiedProperties();
+
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         // TODO: Debug only:
@@ -623,5 +629,5 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
         }
     }
-    #endif
+#endif
 }

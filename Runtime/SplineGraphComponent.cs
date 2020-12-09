@@ -303,7 +303,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         #endif
     }
 
-    #if UNITY_EDITOR
+#if UNITY_EDITOR
     [CustomEditor(typeof(SplineGraphComponent))]
     public class SplineGraphComponentEditor : Editor
     {
@@ -328,6 +328,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         public override void OnInspectorGUI()
         {
+            serializedObject.Update();
+            
             var sgc = target as SplineGraphComponent;
             sgc.Verify();
 
@@ -396,6 +398,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
                         sgc.EdgeAdd(vertexParent, vertexChild);
                     }
+
+                    
                 }
             }
 
@@ -640,6 +644,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             EditorGUILayout.EndVertical();
 
             sgc.Verify();
+
+            serializedObject.ApplyModifiedProperties();
+
+            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 
         private void OnSceneGUI()
@@ -820,7 +828,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                             }
                             else
                             {
-                                sgc.UndoRecord("Edited Spline Graph Vertex Position", true);
+                                sgc.UndoRecord("Edited Spline Graph Vertex Position");
                             }
                             
                             for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
@@ -939,5 +947,5 @@ namespace Pastasfuture.SplineGraph.Runtime
             sgc.Verify();
         }
     }
-    #endif
+#endif
 }
