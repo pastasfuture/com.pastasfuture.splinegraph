@@ -743,6 +743,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                             // Compute the quaternion difference.
                             rotationOffsetOS = math.mul(vertexRotationNewOS, math.inverse(vertexRotationOS));
 
+                            // Cache off the position of the current vertex we are rotating.
+                            // This will be used to rotate multi-selected vertices about this origin.
+                            rotationOffsetOriginOS = vertexPositionOS;
+
+
                             // Under multi-selection, rotationOffsetOS will be the same for all points being transformed.
                             break;
                         }
@@ -860,6 +865,19 @@ namespace Pastasfuture.SplineGraph.Runtime
                             quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
                             vertexRotationOS = math.mul(rotationOffsetOS, vertexRotationOS);
                             sgc.splineGraph.payload.rotations.data[selectedVertexIndex] = vertexRotationOS;
+
+                            // In order to support the case where we have multi-selected vertices
+                            // we need to rotate the positions of all our selected vertices about the vertex
+                            // whos handle is currently being interacted with.
+                            float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
+                            vertexPositionOS = transform.TransformPoint(vertexPositionOS);
+                            vertexPositionOS -= rotationOffsetOriginOS;
+
+                            vertexPositionOS = math.mul(rotationOffsetOS, vertexPositionOS);
+
+                            vertexPositionOS += rotationOffsetOriginOS;
+                            vertexPositionOS = transform.InverseTransformPoint(vertexPositionOS);
+                            sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
                         }
 
                         for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)

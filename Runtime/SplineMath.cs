@@ -398,13 +398,13 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         [BurstCompile]
-        public static float ComputeLengthEstimate(Spline s, float errorThreshold)
+        public static float ComputeLengthEstimate(Spline s, float errorThreshold, int depthThreshold = 32, int depth = 0)
         {
             float lengthEstimate = ComputeLengthEstimateFromConvexHull(out float error, s);
-            if (error < errorThreshold) { return lengthEstimate; }
+            if (error < errorThreshold || depth >= depthThreshold) { return lengthEstimate; }
 
             ComputeSplit(out Spline s0, out Spline s1, s);
-            return ComputeLengthEstimate(s0, errorThreshold) + ComputeLengthEstimate(s1, errorThreshold);
+            return ComputeLengthEstimate(s0, errorThreshold, depthThreshold, depth + 1) + ComputeLengthEstimate(s1, errorThreshold, depthThreshold, depth + 1);
         }
 
         [BurstCompile]
