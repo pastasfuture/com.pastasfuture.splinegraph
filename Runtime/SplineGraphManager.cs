@@ -83,6 +83,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 isDirty = false;
 
                 splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+
+#if UNITY_EDITOR
+                EditorUtility.SetDirty(this);
+#endif
             }
         }
 
@@ -96,16 +100,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDeserializationNeeded = true;
         }
 
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         public void UndoRecord(string message)
         {
             Undo.RecordObject(this, message);
             this.isDirty = true;
             ++this.lastDirtyTimestamp;
         }
-        #endif
+#endif
 
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         public void BuildCompactGraph()
         {
             Verify();
@@ -114,6 +118,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             splineGraph.BuildCompactDirectedGraph(ref splineGraphCompact, Allocator.Persistent);
             splineGraph.Dispose();
             splineGraph = splineGraphCompact;
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via BuildCompactDirectedGraph().
+            isDirty = true;
         }
 
         public void VertexWeldAllWithinThreshold()
@@ -199,6 +207,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                         splineGraph.payload.leashes.data[v0] = new float2(leashX, leashY);
                     }
                     splineGraph.VertexMerge(v0, v1, Allocator.Persistent);
+
+                    // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+                    // and we have just changed our runtime data representation via welding.
+                    isDirty = true;
                 }
 
             }
@@ -310,6 +322,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 // This will automatically happen just by merging vertex0Child into vertex0.
                 splineGraph.VertexMerge(v0, vertex0ChildIndex, Allocator.Persistent);
 
+                // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+                // and we have just changed our runtime data representation via welding.
+                isDirty = true;
+
                 // Since we merged, we can stay at v0 and test again to see if there is a new merge case.
                 --v0;
             }
@@ -391,10 +407,14 @@ namespace Pastasfuture.SplineGraph.Runtime
             // 4) Compact.
             BuildCompactGraph();
 
-        }
-        #endif // #if UNITY_EDITOR
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation.
+            isDirty = true;
 
-        #if UNITY_EDITOR
+        }
+#endif // #if UNITY_EDITOR
+
+#if UNITY_EDITOR
         void OnDrawGizmos()
         {
             Verify();
@@ -410,9 +430,9 @@ namespace Pastasfuture.SplineGraph.Runtime
             UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
             UnityEditor.SceneView.RepaintAll();
         }
-        #endif
+#endif
 
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         // Debug only:
         void Update()
         {
@@ -487,7 +507,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
         }
-        #endif
+#endif
     }
 
 #if UNITY_EDITOR
@@ -593,6 +613,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             // If we are currently tumbling the camera, do not attempt to do anything else.
             if (Event.current.alt) { return; }
+
+            serializedObject.Update();
 
             var sgm = target as SplineGraphManager;
             sgm.Verify();

@@ -82,6 +82,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 isDirty = false;
 
                 splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+
+#if UNITY_EDITOR
+                EditorUtility.SetDirty(this);
+#endif
             }
         }
 
@@ -95,7 +99,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDeserializationNeeded = true;
         }
 
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         public Int16 VertexAdd(float3 position, quaternion rotation, float2 scale, float2 leash)
         {
             Verify();
@@ -115,6 +119,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             Verify();
 
             splineGraph.VertexRemove(vertexIndex);
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via VertexRemove().
+            isDirty = true;
         }
 
         public void EdgeAdd(Int16 vertexParent, Int16 vertexChild)
@@ -122,6 +130,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             Verify();
 
             splineGraph.EdgeAdd(vertexParent, vertexChild, Allocator.Persistent);
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via EdgeAdd().
+            isDirty = true;
         }
 
         public void EdgeRemove(Int16 vertexParent, Int16 vertexChild)
@@ -129,6 +141,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             Verify();
 
             splineGraph.EdgeRemove(vertexParent, vertexChild);
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via EdgeRemove().
+            isDirty = true;
         }
 
         public void VertexMerge(Int16 vertexParent, Int16 vertexChild)
@@ -136,6 +152,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             Verify();
 
             splineGraph.VertexMerge(vertexParent, vertexChild, Allocator.Persistent);
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via VertexMerge().
+            isDirty = true;
         }
 
         public void UndoRecord(string message, bool isForceNewOperationEnabled = false)
@@ -160,6 +180,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             splineGraph.BuildCompactDirectedGraph(ref splineGraphCompact, Allocator.Persistent);
             splineGraph.Dispose();
             splineGraph = splineGraphCompact;
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via BuildCompactDirectedGraph().
+            isDirty = true;
         }
 
         public void BuildCompactReverseGraph()
@@ -170,6 +194,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             splineGraph.BuildCompactReverseDirectedGraph(ref splineGraphCompact, Allocator.Persistent);
             splineGraph.Dispose();
             splineGraph = splineGraphCompact;
+
+            // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
+            // and we have just changed our runtime data representation via BuildCompactReverseDirectedGraph().
+            isDirty = true;
         }
 
         public static void DrawSplineGraph(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph, Transform splineGraphTransform)
@@ -288,9 +316,9 @@ namespace Pastasfuture.SplineGraph.Runtime
             Handles.matrix = handleMatrixPrevious;
             Handles.color = handleColorPrevious;
         }
-        #endif
+#endif
 
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
         void OnDrawGizmos()
         {
             Verify();
@@ -300,7 +328,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             // return; // TODO: Remove?
             SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform);
         }
-        #endif
+#endif
     }
 
 #if UNITY_EDITOR
@@ -655,6 +683,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             // If we are currently tumbling the camera, do not attempt to do anything else.
             if (Event.current.alt) { return; }
 
+            serializedObject.Update();
+
             var sgc = target as SplineGraphComponent;
             sgc.Verify();
 
@@ -963,6 +993,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             // Now that we have potentially performed some transforms to the spline graph, tell it to serialize (just to be safe).
             // Otherwise, this serialization would happen next frame (which is probably fine?)
             sgc.Verify();
+
+            serializedObject.ApplyModifiedProperties();
         }
     }
 #endif
