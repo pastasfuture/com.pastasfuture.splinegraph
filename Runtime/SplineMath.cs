@@ -445,14 +445,14 @@ namespace Pastasfuture.SplineGraph.Runtime
         [BurstCompile]
         private static void ComputeSplitComponentAtT(out float4 splineComponent0, out float4 splineComponent1, float4 splineComponent, float t)
         {
-            float q0 = (splineComponent.x + splineComponent.y) * t;
-            float q1 = (splineComponent.y + splineComponent.z) * t;
-            float q2 = (splineComponent.z + splineComponent.w) * t;
+            float q0 = math.lerp(splineComponent.x, splineComponent.y, t);
+            float q1 = math.lerp(splineComponent.y, splineComponent.z, t);
+            float q2 = math.lerp(splineComponent.z, splineComponent.w, t);
 
-            float r0 = (q0 + q1) * t; // x + 2y + z / 4
-            float r1 = (q1 + q2) * t; // y + 2z + w / 4
+            float r0 = math.lerp(q0, q1, t);
+            float r1 = math.lerp(q1, q2, t);
 
-            float s0 = (r0 + r1) * t; // q0 + 2q1 + q2 / 4 = x+y + 2(y+z) + z+w / 8 = x + 3y + 3z + w
+            float s0 = math.lerp(r0, r1, t);
 
             float sx = splineComponent.x; // support aliasing
             float sw = splineComponent.w;
@@ -1115,6 +1115,132 @@ namespace Pastasfuture.SplineGraph.Runtime
                 edgesParentToChild,
                 edgesChildToParent
             );
+        }
+
+        [BurstCompile]
+        public struct SplineGraphIteratorState
+        {
+            public float distance;
+            public float t;
+            public Int16 vertexIndex;
+            public Int16 edgeIndex;
+
+            public static SplineGraphIteratorState zero = new SplineGraphIteratorState
+            {
+                distance = 0.0f,
+                t = 0.0f,
+                vertexIndex = -1,
+                edgeIndex = -1
+            };
+        }
+
+        [BurstCompile]
+        public static bool SplineGraphIteratorForward(
+            ref SplineGraphIteratorState state,
+            NativeArray<DirectedVertex> vertices,
+            int verticesCount,
+            NativeArray<DirectedEdge> edgesParentToChild,
+            NativeArray<Spline> splinesParentToChild,
+            NativeArray<float> edgeLengths,
+            float errorThreshold = 1e-5f,
+            int depthThreshold = 32
+        )
+        {
+            Debug.Assert(state.distance > 0.0f);
+            Debug.Assert(state.vertexIndex != -1);
+            Debug.Assert(state.edgeIndex != -1);
+            Debug.Assert(state.t >= 0.0f && state.t <= 1.0f);
+
+            Spline spline = splinesParentToChild[state.edgeIndex];
+            float edgeLengthRemaining = edgeLengths[state.edgeIndex]; // Fast path.
+            if (state.t > 1e-5f)
+            {
+                ComputeSplitAtT(out Spline s0, out Spline s1, spline, state.t);
+                edgeLengthRemaining = ComputeLengthEstimate(s1, errorThreshold, depthThreshold);
+            }
+            
+            float distanceNext = state.distance - edgeLengthRemaining;
+            if (distanceNext >= 0.0f)
+            {
+                // Advance to the next spline.
+                Int16 vertexIndexNext = edgesParentToChild[state.edgeIndex].vertexIndex;
+                DirectedVertex vertexNext = vertices[vertexIndexNext];
+                Debug.Assert(vertexNext.IsValid() == 1);
+                if (vertexNext.childHead == -1)
+                {
+                    // We have reached a dead end.
+                    state = new SplineGraphIteratorState
+                    { 
+                        distance = distanceNext,
+                        t = 1.0f,
+                        vertexIndex = state.vertexIndex,
+                        edgeIndex = state.edgeIndex 
+                    };
+                    return false;
+                }
+                else
+                {
+                    state = new SplineGraphIteratorState
+                    { 
+                        distance = distanceNext,
+                        t = 0.0f,
+                        vertexIndex = vertexIndexNext,
+                        edgeIndex = -1 // Caller will now need to choose which child edge index to traverse into. 
+                    };
+                    return true;
+                }
+                
+            }
+
+            // Reaching the end within our current spline.
+            int sampleCount = (int)math.ceil(state.distance / edgeLengths[state.edgeIndex] * 1024.0f);
+            sampleCount = math.min(sampleCount, 1024);
+            float sampleCountInverse = 1.0f / (float)sampleCount;
+            float nextT = state.t;
+            for (int s = 0; s < sampleCount; ++s)
+            {
+                nextT = ComputeTFromDelta(spline, nextT, state.distance * sampleCountInverse);
+            }
+            Debug.Assert(nextT <= 1.0f);
+            nextT = math.saturate(nextT); // saturate is not strictly necessary - it is simply performed to clean up precision issues.
+            state = new SplineGraphIteratorState
+            {
+                distance = 0.0f,
+                t = nextT,
+                vertexIndex = state.vertexIndex,
+                edgeIndex = state.edgeIndex
+            };
+            return false;
+        }
+
+        [BurstCompile]
+        public static void ComputePositionRotationLeashFromT(
+            out float3 position,
+            out quaternion rotation,
+            out float2 leash,
+            Int16 vertexIndexParent,
+            Int16 vertexIndexChild,
+            Int16 edgeIndex,
+            float t,
+            NativeArray<float3> positions,
+            NativeArray<quaternion> rotations,
+            NativeArray<float2> leashes,
+            NativeArray<SplineMath.Spline> splines,
+            NativeArray<SplineMath.Spline> splineLeashes
+            )
+        {
+            SplineMath.Spline spline = splines[edgeIndex];
+            quaternion rotationParent = rotations[vertexIndexParent];
+            quaternion rotationChild = rotations[vertexIndexChild];
+            SplineMath.Spline splineLeash = splineLeashes[edgeIndex];
+
+            float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, t);
+            quaternion rotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, t);         
+            float2 leashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, t).xy;
+
+            position = positionOnSpline;
+            rotation = rotationOnSpline;
+            leash = leashMaxOS;
         }
     }
 }
