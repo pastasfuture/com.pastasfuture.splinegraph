@@ -20,6 +20,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public int type = 0;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+        public int gizmoSplineSegmentCount = 4;
 
         private bool isDeserializationNeeded = true;
         [System.NonSerialized] public bool isDirty = true;
@@ -200,7 +201,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDirty = true;
         }
 
-        public static void DrawSplineGraph(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph, Transform splineGraphTransform)
+        public static void DrawSplineGraph(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> splineGraph, Transform splineGraphTransform, int gizmoSplineSegmentCount)
         {
             Color handleColorPrevious = Handles.color;
             Matrix4x4 handleMatrixPrevious = Handles.matrix;
@@ -269,12 +270,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                     // TODO: Perform adaptive tesselation of line.
                     SplineMath.Spline spline = splineGraph.payload.edgeParentToChildSplines.data[e];
                     float splineLength = splineGraph.payload.edgeLengths.data[e];
-                    const int SAMPLE_COUNT = 16;
-                    const float SAMPLE_COUNT_INVERSE = 1.0f / (float)SAMPLE_COUNT;
-                    for (int s = 0; s < SAMPLE_COUNT; ++s)
+                    float gizmoSplineSegmentCountInverse = 1.0f / (float)gizmoSplineSegmentCount;
+                    for (int s = 0; s < gizmoSplineSegmentCount; ++s)
                     {
-                        float t0 = (float)(s + 0) * SAMPLE_COUNT_INVERSE;
-                        float t1 = (float)(s + 1) * SAMPLE_COUNT_INVERSE;
+                        float t0 = (float)(s + 0) * gizmoSplineSegmentCountInverse;
+                        float t1 = (float)(s + 1) * gizmoSplineSegmentCountInverse;
 
                         float3 samplePosition0 = SplineMath.EvaluatePositionFromT(spline, t0);
                         float3 samplePosition1 = SplineMath.EvaluatePositionFromT(spline, t1);
@@ -299,9 +299,9 @@ namespace Pastasfuture.SplineGraph.Runtime
                         // {
                         //     // float curvature = SplineMath.EvaluateCurvatureFromT(spline, 0.5f);
                         //     // Handles.Label(labelPosition, "Curvature = " + curvature);
-                        //     for (int s = 0; s < SAMPLE_COUNT; ++s)
+                        //     for (int s = 0; s < gizmoSplineSegmentCount; ++s)
                         //     {
-                        //         float t0 = (float)(s + 0) * SAMPLE_COUNT_INVERSE;
+                        //         float t0 = (float)(s + 0) * gizmoSplineSegmentCountInverse;
 
                         //         float3 samplePosition0 = SplineMath.EvaluatePositionFromT(spline, t0);
 
@@ -326,7 +326,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             if (!isEditingEnabled) { return; }
 
             // return; // TODO: Remove?
-            SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform);
+            SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform, gizmoSplineSegmentCount);
         }
 #endif
     }
@@ -381,6 +381,14 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 sgc.UndoRecord("Edited Spline Graph Type");
                 sgc.type = typeNew;
+            }
+
+            int gizmoSplineSegmentCountNew = EditorGUILayout.DelayedIntField("Gizmo Spline Segment Count", sgc.gizmoSplineSegmentCount);
+            gizmoSplineSegmentCountNew = math.clamp(gizmoSplineSegmentCountNew, 1, int.MaxValue);
+            if (gizmoSplineSegmentCountNew != sgc.gizmoSplineSegmentCount)
+            {
+                sgc.UndoRecord("Edited Spline Graph Spline Segment Count");
+                sgc.gizmoSplineSegmentCount = gizmoSplineSegmentCountNew;
             }
 
             EditorGUILayout.BeginVertical();

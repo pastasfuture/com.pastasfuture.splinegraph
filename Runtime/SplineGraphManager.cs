@@ -19,6 +19,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public int type = 0;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+        public int gizmoSplineSegmentCount = 4;
 
         private bool isDeserializationNeeded = true;
         [System.NonSerialized] public bool isDirty = true;
@@ -423,7 +424,7 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             // return; // TODO: Remove?
 
-            SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform);
+            SplineGraphComponent.DrawSplineGraph(ref splineGraph, transform, gizmoSplineSegmentCount);
 
             // Debug only:
             if (!isEditingEnabled) { return; }
