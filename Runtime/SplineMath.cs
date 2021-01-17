@@ -1214,6 +1214,85 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         [BurstCompile]
+        public static bool SplineGraphIteratorReverse(
+            ref SplineGraphIteratorState state,
+            NativeArray<DirectedVertex> vertices,
+            int verticesCount,
+            NativeArray<DirectedEdge> edgesChildToParent,
+            NativeArray<Spline> splinesChildToParent,
+            NativeArray<float> edgeLengths,
+            float errorThreshold = 1e-5f,
+            int depthThreshold = 32
+        )
+        {
+            Debug.Assert(state.distance > 0.0f);
+            Debug.Assert(state.vertexIndex != -1);
+            Debug.Assert(state.edgeIndex != -1);
+            Debug.Assert(state.t >= 0.0f && state.t <= 1.0f);
+
+            Spline spline = splinesChildToParent[state.edgeIndex];
+            float edgeLengthRemaining = edgeLengths[state.edgeIndex]; // Fast path.
+            if (state.t > 1e-5f)
+            {
+                ComputeSplitAtT(out Spline s0, out Spline s1, spline, state.t);
+                edgeLengthRemaining = ComputeLengthEstimate(s1, errorThreshold, depthThreshold);
+            }
+            
+            float distanceNext = state.distance - edgeLengthRemaining;
+            if (distanceNext >= 0.0f)
+            {
+                // Advance to the next spline.
+                Int16 vertexIndexNext = edgesChildToParent[state.edgeIndex].vertexIndex;
+                DirectedVertex vertexNext = vertices[vertexIndexNext];
+                Debug.Assert(vertexNext.IsValid() == 1);
+                if (vertexNext.parentHead == -1)
+                {
+                    // We have reached a dead end.
+                    state = new SplineGraphIteratorState
+                    { 
+                        distance = distanceNext,
+                        t = 1.0f,
+                        vertexIndex = state.vertexIndex,
+                        edgeIndex = state.edgeIndex 
+                    };
+                    return false;
+                }
+                else
+                {
+                    state = new SplineGraphIteratorState
+                    { 
+                        distance = distanceNext,
+                        t = 0.0f,
+                        vertexIndex = vertexIndexNext,
+                        edgeIndex = -1 // Caller will now need to choose which child edge index to traverse into. 
+                    };
+                    return true;
+                }
+                
+            }
+
+            // Reaching the end within our current spline.
+            int sampleCount = (int)math.ceil(state.distance / edgeLengths[state.edgeIndex] * 1024.0f);
+            sampleCount = math.min(sampleCount, 1024);
+            float sampleCountInverse = 1.0f / (float)sampleCount;
+            float nextT = state.t;
+            for (int s = 0; s < sampleCount; ++s)
+            {
+                nextT = ComputeTFromDelta(spline, nextT, state.distance * sampleCountInverse);
+            }
+            Debug.Assert(nextT <= 1.0f);
+            nextT = math.saturate(nextT); // saturate is not strictly necessary - it is simply performed to clean up precision issues.
+            state = new SplineGraphIteratorState
+            {
+                distance = 0.0f,
+                t = nextT,
+                vertexIndex = state.vertexIndex,
+                edgeIndex = state.edgeIndex
+            };
+            return false;
+        }
+
+        [BurstCompile]
         public static void ComputePositionRotationLeashFromT(
             out float3 position,
             out quaternion rotation,
