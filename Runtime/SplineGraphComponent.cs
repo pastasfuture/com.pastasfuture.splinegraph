@@ -92,7 +92,17 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         public void OnBeforeSerialize()
         {
-            Verify();
+            // Warning: OnBeforeSerialize is the one place where we need this guard.
+            // Without it, during a domain reload from scripts recompiling,
+            // Dispose() will be triggered from OnDestroy().
+            // Later, OnBeforeSerialize() will get hit, with isDeserializationNeeded set to true.
+            // This will trigger Verify() to Deserialize the splineGraph, causing Allocator.Persistent allocations.
+            // These allocations will never get cleaned up, because Dispose was already run.
+            // Additionally, it never makes sense to deserialize, just to reserialize in OnBeforeSerialize().
+            if (!isDeserializationNeeded)
+            {
+                Verify();
+            }
         }
 
         public void OnAfterDeserialize()
