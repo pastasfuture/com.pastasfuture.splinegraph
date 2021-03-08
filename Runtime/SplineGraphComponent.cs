@@ -364,6 +364,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         private bool isExtruding = false;
 
+        private static DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> copyScratchWS;
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -478,6 +480,106 @@ namespace Pastasfuture.SplineGraph.Runtime
                 sgc.BuildCompactGraph();
 
                 // Vertex and Edge indices change when graph is compacted.
+                // Selection will no longer be valid.
+                selectedIndices.Clear();
+                Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+            }
+
+            if (GUILayout.Button("Copy Graph"))
+            {
+                sgc.splineGraph.Copy(ref sgc.splineGraph, ref SplineGraphComponentEditor.copyScratchWS, Allocator.Persistent);
+
+                // Convert the graph payload from object space, into world space.
+                // TODO: Add (lossy) support for respecting scale transformations on payload.scales and payload.leashes
+                for (Int16 v = 0, vCount = (Int16)SplineGraphComponentEditor.copyScratchWS.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = SplineGraphComponentEditor.copyScratchWS.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    float3 vertexPositionOS = SplineGraphComponentEditor.copyScratchWS.payload.positions.data[v];
+                    float3 vertexPositionWS = sgc.transform.TransformPoint(vertexPositionOS);
+                    SplineGraphComponentEditor.copyScratchWS.payload.positions.data[v] = vertexPositionWS;
+                }
+
+                for (Int16 v = 0, vCount = (Int16)SplineGraphComponentEditor.copyScratchWS.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = SplineGraphComponentEditor.copyScratchWS.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    quaternion vertexRotationOS = SplineGraphComponentEditor.copyScratchWS.payload.rotations.data[v];
+                    quaternion vertexRotationWS = math.mul((quaternion)sgc.transform.rotation, vertexRotationOS);
+                    SplineGraphComponentEditor.copyScratchWS.payload.rotations.data[v] = vertexRotationWS;
+                }
+
+                for (Int16 v = 0, vCount = (Int16)SplineGraphComponentEditor.copyScratchWS.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = SplineGraphComponentEditor.copyScratchWS.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    SplineGraphComponentEditor.copyScratchWS.payload.VertexComputePayloads(ref SplineGraphComponentEditor.copyScratchWS, v);
+                }
+
+                for (Int16 e = 0, eCount = (Int16)SplineGraphComponentEditor.copyScratchWS.edgePoolChildren.count; e < eCount; ++e)
+                {
+                    DirectedEdge edge = SplineGraphComponentEditor.copyScratchWS.edgePoolChildren.data[e];
+                    if (edge.IsValid() == 0) { continue; }
+
+                    Int16 vertexIndexChild = edge.vertexIndex;
+                    Int16 vertexIndexParent = SplineGraphComponentEditor.copyScratchWS.edgePoolParents.data[e].vertexIndex;
+
+                    SplineGraphComponentEditor.copyScratchWS.payload.EdgeComputePayloads(ref SplineGraphComponentEditor.copyScratchWS, vertexIndexParent, vertexIndexChild);
+                }
+            }
+
+            if (GUILayout.Button("Paste Graph"))
+            {
+                sgc.UndoRecord("Spline Graph Paste Graph", true);
+
+                SplineGraphComponentEditor.copyScratchWS.Copy(ref SplineGraphComponentEditor.copyScratchWS, ref sgc.splineGraph, Allocator.Persistent);
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    float3 vertexPositionWS = sgc.splineGraph.payload.positions.data[v];
+                    float3 vertexPositionOS = sgc.transform.InverseTransformPoint(vertexPositionWS);
+                    sgc.splineGraph.payload.positions.data[v] = vertexPositionOS;
+                }
+
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    quaternion vertexRotationWS = sgc.splineGraph.payload.rotations.data[v];
+                    quaternion vertexRotationOS = math.mul(math.inverse(sgc.transform.rotation), vertexRotationWS);
+                    sgc.splineGraph.payload.rotations.data[v] = vertexRotationOS;
+                }
+
+                for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    sgc.splineGraph.payload.VertexComputePayloads(ref sgc.splineGraph, v);
+                }
+
+                for (Int16 e = 0, eCount = (Int16)sgc.splineGraph.edgePoolChildren.count; e < eCount; ++e)
+                {
+                    DirectedEdge edge = sgc.splineGraph.edgePoolChildren.data[e];
+                    if (edge.IsValid() == 0) { continue; }
+
+                    Int16 vertexIndexChild = edge.vertexIndex;
+                    Int16 vertexIndexParent = sgc.splineGraph.edgePoolParents.data[e].vertexIndex;
+
+                    sgc.splineGraph.payload.EdgeComputePayloads(ref sgc.splineGraph, vertexIndexParent, vertexIndexChild);
+                }
+
+
+                // Convert the graph payload from world space to object space.
+                // TODO: Add (lossy) support for respecting scale transformations on payload.scales and payload.leashes
+
+                // Vertex and Edge indices change when graph is pasted.
                 // Selection will no longer be valid.
                 selectedIndices.Clear();
                 Repaint(); // Repaint editor to display selection changes in InspectorGUI.

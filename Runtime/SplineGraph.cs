@@ -66,6 +66,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             NativeArray<T>.Copy(data, res, count);
         }
 
+        public static void Copy(ref NativeArrayDynamic<T> src, ref NativeArrayDynamic<T> dst, int count, Allocator allocator)
+        {
+            Debug.Assert(count >= 0 && count <= src.count);
+            if (count == 0) { return; }
+            dst.Clear();
+            dst.Ensure(count, allocator);
+            NativeArray<T>.Copy(src.data, dst.data, count);
+            dst.count = count;
+        }
+
         public void Push(T value, Allocator allocator)
         {
             Ensure(count + 1, allocator);
@@ -140,6 +150,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         void Create(out T res, Allocator allocator);
         void Dispose();
         void Clear();
+        void Copy(ref T src, ref T dst, Allocator allocator); // Really, this is static.
         void VertexEnsure(Int16 capacityRequested, Allocator allocator);
         void EdgeEnsure(Int16 capacityRequested, Allocator allocator);
         Int16 VertexPush(Allocator allocator);
@@ -229,6 +240,20 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.Clear();
             edgeLengths.Clear();
             edgeBounds.Clear();
+        }
+
+        public void Copy(ref SplineGraphPayload src, ref SplineGraphPayload dst, Allocator allocator)
+        {
+            NativeArrayDynamic<float3>.Copy(ref src.positions, ref dst.positions, src.positions.count, allocator);
+            NativeArrayDynamic<quaternion>.Copy(ref src.rotations, ref dst.rotations, src.rotations.count, allocator);
+            NativeArrayDynamic<float2>.Copy(ref src.scales, ref dst.scales, src.scales.count, allocator);
+            NativeArrayDynamic<float2>.Copy(ref src.leashes, ref dst.leashes, src.leashes.count, allocator);
+            NativeArrayDynamic<SplineMath.Spline>.Copy(ref src.edgeParentToChildSplines, ref dst.edgeParentToChildSplines, src.edgeParentToChildSplines.count, allocator);
+            NativeArrayDynamic<SplineMath.Spline>.Copy(ref src.edgeChildToParentSplines, ref dst.edgeChildToParentSplines, src.edgeChildToParentSplines.count, allocator);
+            NativeArrayDynamic<SplineMath.Spline>.Copy(ref src.edgeParentToChildSplinesLeashes, ref dst.edgeParentToChildSplinesLeashes, src.edgeParentToChildSplinesLeashes.count, allocator);
+            NativeArrayDynamic<SplineMath.Spline>.Copy(ref src.edgeChildToParentSplinesLeashes, ref dst.edgeChildToParentSplinesLeashes, src.edgeChildToParentSplinesLeashes.count, allocator);
+            NativeArrayDynamic<float>.Copy(ref src.edgeLengths, ref dst.edgeLengths, src.edgeLengths.count, allocator);
+            NativeArrayDynamic<float3>.Copy(ref src.edgeBounds, ref dst.edgeBounds, src.edgeBounds.count, allocator);
         }
 
         public void Serialize(ref SplineGraphPayloadSerializable o)
@@ -509,6 +534,21 @@ namespace Pastasfuture.SplineGraph.Runtime
             verticesFreeHoleCount = 0;
             edgePoolParentsFreeHoleCount = 0;
             edgePoolChildrenFreeHoleCount = 0;
+        }
+
+        public void Copy(ref DirectedGraph<PayloadT, PayloadSerializableT> src, ref DirectedGraph<PayloadT, PayloadSerializableT> dst, Allocator allocator)
+        {
+            dst.Clear();
+
+            payload.Copy(ref src.payload, ref dst.payload, allocator);
+
+            NativeArrayDynamic<DirectedVertex>.Copy(ref src.vertices, ref dst.vertices, src.vertices.count, allocator);
+            NativeArrayDynamic<DirectedEdge>.Copy(ref src.edgePoolParents, ref dst.edgePoolParents, src.edgePoolParents.count, allocator);
+            NativeArrayDynamic<DirectedEdge>.Copy(ref src.edgePoolChildren, ref dst.edgePoolChildren, src.edgePoolChildren.count, allocator);
+
+            dst.verticesFreeHoleCount = src.verticesFreeHoleCount;
+            dst.edgePoolParentsFreeHoleCount = src.edgePoolParentsFreeHoleCount;
+            dst.edgePoolChildrenFreeHoleCount = src.edgePoolChildrenFreeHoleCount;
         }
 
         public void Serialize(ref DirectedGraphSerializable og, ref PayloadSerializableT op)
