@@ -35,7 +35,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             if (splineGraphComponent == null && splineGraphManager == null) { return; }
             if (meshFilter == null) { return; }
 
-            UpdateMeshFromSplineGraphManager();
+            UpdateMeshFromSplineGraph();
         }
         #endif
 
@@ -72,11 +72,15 @@ namespace Pastasfuture.SplineGraph.Runtime
                 // Completely up to date. Nothing to do.
                 return;
             }
-            UpdateMeshFromSplineGraphManager();
+            UpdateMeshFromSplineGraph();
 
             lastDirtyTimestamp = (splineGraphComponent != null)
                 ? splineGraphComponent.lastDirtyTimestamp
                 : splineGraphManager.lastDirtyTimestamp;
+            lastDirtyRadius = radius;
+            lastDirtySubdivisionsPerMeter = subdivisionsPerMeter;
+            lastDirtyUVScale = uvScale;
+            lastDirtyRadialEdgeCount = radialEdgeCount;
         }
 
         void OnDrawGizmos()
@@ -85,7 +89,32 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
         #endif
 
-        void UpdateMeshFromSplineGraphManager()
+        public void ForceUpdateMeshFromSplineGraph()
+        {
+            if (splineGraphComponent == null && splineGraphManager == null) { return; }
+            if (meshFilter == null) { return; }
+
+            if (splineGraphComponent != null)
+            {
+                splineGraphComponent.Verify();
+            }
+            else if (splineGraphManager != null)
+            {
+                splineGraphManager.Verify();
+            }
+
+            UpdateMeshFromSplineGraph();
+
+            lastDirtyTimestamp = (splineGraphComponent != null)
+                ? splineGraphComponent.lastDirtyTimestamp
+                : splineGraphManager.lastDirtyTimestamp;
+            lastDirtyRadius = radius;
+            lastDirtySubdivisionsPerMeter = subdivisionsPerMeter;
+            lastDirtyUVScale = uvScale;
+            lastDirtyRadialEdgeCount = radialEdgeCount;
+        }
+
+        void UpdateMeshFromSplineGraph()
         {
             Mesh mesh = meshFilter.sharedMesh;
             if (mesh == null) { mesh = new Mesh(); }

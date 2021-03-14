@@ -34,16 +34,42 @@ namespace Pastasfuture.SplineGraph.Runtime
             return splineGraph;
         }
 
+#if UNITY_EDITOR
+        void SubscribeUndoRedoPerformed()
+        {
+            UnsubscribeUndoRedoPerformed();
+            Undo.undoRedoPerformed += OnUndoRedoPerformed;
+        }
+
+        void UnsubscribeUndoRedoPerformed()
+        {
+            Undo.undoRedoPerformed -= OnUndoRedoPerformed;
+        }
+
+        void OnUndoRedoPerformed()
+        {
+            ++lastDirtyTimestamp;
+        }
+#endif
+
         void OnEnable()
         {
             // DirectedGraph<SplineGraphPayload>.DebugRunTests();
             instances.Add(this);
 
             Verify();
+
+#if UNITY_EDITOR
+            SubscribeUndoRedoPerformed();
+#endif
         }
 
         void OnDisable()
         {
+#if UNITY_EDITOR
+            UnsubscribeUndoRedoPerformed();
+#endif
+
             instances.Remove(this);
 
             Verify();
@@ -59,6 +85,9 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         void OnDestroy()
         {
+#if UNITY_EDITOR
+            UnsubscribeUndoRedoPerformed();
+#endif
             Dispose();
         }
 
