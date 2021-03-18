@@ -19,6 +19,8 @@ namespace Pastasfuture.SplineGraph.Runtime
         public float subdivisionsPerMeter = 1.0f;
         public float uvScale = 1.0f;
         public int radialEdgeCount = 4;
+        public float vertexIntersectionSignedDistanceFadeMin = -0.25f;
+        public float vertexIntersectionSignedDistanceFadeMax = 0.0f; 
         public bool isAutoUpdateEnabled = true;
 
         // Do not need actual time, just a counter.
@@ -160,6 +162,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             Vector3[] vertices = new Vector3[meshVertexCount];
             Vector2[] uvs = new Vector2[meshVertexCount];
             Vector3[] normals = new Vector3[meshVertexCount];
+            Color[] colors = new Color[meshVertexCount];
             int[] triangles = new int[meshVertexCount * 6];
 
             int meshVertexIndex = 0;
@@ -178,13 +181,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 quaternion rotationParent = splineGraph.payload.rotations.data[vertexIndexParent];
                 quaternion rotationChild = splineGraph.payload.rotations.data[vertexIndexChild];
 
-                // For now, simply evaluate the current leash value by lerping between the parent and child leash values, rather than using spline interpolation.
-                // This seems good enough for now (there is a bug in the spline interpolation code commented out below.)
-                // float2 leashParent = splineGraph.payload.leashes.data[vertexIndexParent];
-                // float2 leashChild = splineGraph.payload.leashes.data[vertexIndexChild];
-                SplineMath.Spline splineLeash = true//(followState.DecodeIsReverse() == 0)
-                    ? splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndex]
-                    : splineGraph.payload.edgeChildToParentSplinesLeashes.data[edgeIndex];
+                SplineMath.Spline splineLeash = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndex];
 
                 // Find neighboring edge (if it exists) for use in CSG style operation against current one to handle intersections in branching region.
                 DirectedVertex vertexParent = splineGraph.vertices.data[vertexIndexParent];
@@ -193,32 +190,6 @@ namespace Pastasfuture.SplineGraph.Runtime
                 DirectedVertex vertexChild = splineGraph.vertices.data[vertexIndexChild];
                 Debug.Assert(vertexChild.IsValid() == 1);
 
-                // bool edgeHasSibling = false;
-                // Int16 edgeIndexSibling = -1;
-                // Int16 siblingVertexIndexChild = -1;
-                // SplineMath.Spline splineSibling = SplineMath.Spline.zero;
-                // SplineMath.Spline splineLeashSibling = SplineMath.Spline.zero;
-                // quaternion siblingRotationChild = quaternion.identity;
-                // for (edgeIndexSibling = vertexParent.childHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling].next)
-                // {
-                //     DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
-                //     Debug.Assert(edgeSibling.IsValid() == 1);
-                    
-                //     if (edgeIndexSibling == edgeIndex)
-                //     {
-                //         // Ignore ourselves.
-                //         continue;
-                //     }
-
-                //     // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
-                //     edgeHasSibling = true;
-                //     siblingVertexIndexChild = edgeSibling.vertexIndex;
-                //     Debug.Assert(siblingVertexIndexChild != -1);
-                //     splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
-                //     splineLeashSibling = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndexSibling];
-                //     siblingRotationChild = splineGraph.payload.rotations.data[siblingVertexIndexChild];
-                // }
-
                 int edgeSubdivisionCurrentCount = edgeSubdivisionCount[edgeIndex]; 
                 for (int s = 0; s <= edgeSubdivisionCurrentCount; ++s)
                 {
@@ -226,14 +197,13 @@ namespace Pastasfuture.SplineGraph.Runtime
                     // Debug.Log("s = " + s + ", sCount = " + edgeSubdivisionCurrentCount + ", t = " + t);
 
                     float vNormalized = t;
-                    // TODO: Get this code working
-                    // if (s > 0)
-                    // {
-                    //     // Compute the relative distance we have traveled between our current edge ring and previous.
-                    //     SplineMath.ComputeSplitAtT(out SplineMath.Spline s00, out SplineMath.Spline s01, spline, t);
+                    if (s > 0)
+                    {
+                        // Compute the relative distance we have traveled between our current edge ring and previous.
+                        SplineMath.ComputeSplitAtT(out SplineMath.Spline s00, out SplineMath.Spline s01, spline, t);
                         
-                    //     vNormalized = SplineMath.ComputeLengthEstimate(s00, 1e-5f) / splineLength;
-                    // }
+                        vNormalized = SplineMath.ComputeLengthEstimate(s00, 1e-5f) / splineLength;
+                    }
 
                     float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, t);
                     quaternion rotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, t);
@@ -258,7 +228,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                     }
 
                     // Generate radial ring of vertices.
-                    bool ringIntersectsSibling = false;
+                    // bool ringIntersectsSibling = false;
                     for (int v = 0; v < radialEdgeCount; ++v)
                     {
                         float thetaNormalized = (float)v / (float)radialEdgeCount;
@@ -271,134 +241,73 @@ namespace Pastasfuture.SplineGraph.Runtime
                         float3 vertexOffsetWS = math.mul(rotationOnSpline, new float3(vertexOffsetOS, 0.0f));
                         float3 vertexPositionWS = positionOnSpline + vertexOffsetWS;
 
-                        // {
-                        //     // Test for intersections along previous points on the spline segment (can happen with large leashes and sharp turns).
-                        //     SplineMath.FindTFromClosestPointOnSpline(out float otherClosestT, out float otherClosestDistance, vertexPositionWS, spline);
-
-                        //     float3 vertexOtherOriginWS = SplineMath.EvaluatePositionFromT(spline, otherClosestT);
-                        //     quaternion otherRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, otherClosestT);
-                        //     float2 otherLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, otherClosestT).xy;
-
-                        //     float3 vertexOtherOffsetWS = vertexPositionWS - vertexOtherOriginWS;
-                        //     float2 vertexOtherOffsetOS = math.mul(math.inverse(otherRotationOnSpline), vertexOtherOffsetWS).xy;
-                        //     float2 vertexOtherOffsetNormalizedOS = vertexOtherOffsetOS.xy / otherLeashMaxOS;
-
-                        //     vertexOtherOffsetOS = (math.lengthsq(vertexOtherOffsetNormalizedOS) < 1.0f)
-                        //         ? (math.normalize(vertexOtherOffsetNormalizedOS) * otherLeashMaxOS)
-                        //         : vertexOtherOffsetOS;
-
-                        //     vertexOtherOffsetWS = math.mul(otherRotationOnSpline, new float3(vertexOtherOffsetOS, 0.0f));
-
-                        //     vertexPositionWS = vertexOtherOffsetWS + vertexOtherOriginWS;
-                        // }
-
-                        // if (edgeHasSibling)
-                        // {
-                        //     SplineMath.FindTFromClosestPointOnSpline(out float siblingClosestT, out float siblingClosestDistance, vertexPositionWS, splineSibling);
-
-                        //     float3 siblingPositionOnSpline = SplineMath.EvaluatePositionFromT(splineSibling, siblingClosestT);
-                        //     quaternion siblingRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(splineSibling, rotationParent, siblingRotationChild, siblingClosestT);
-                        //     float2 siblingLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeashSibling, siblingClosestT).xy;
-
-                        //     if (math.length(math.mul(math.inverse(siblingRotationOnSpline), vertexPositionWS - siblingPositionOnSpline).xy / leashMaxOS) < 1.0f)
-                        //     {
-                        //         // // Inside of sibling.
-                        //         // float2 siblingVertexOffsetOS = new float2(
-                        //         //     math.cos(theta),
-                        //         //     math.sin(theta)
-                        //         // ) * siblingLeashMaxOS;
-
-                        //         // float3 siblingVertexOffsetWS = math.mul(siblingRotationOnSpline, new float3(siblingVertexOffsetOS, 0.0f));
-                        //         // float3 siblingVertexPositionWS = siblingPositionOnSpline + siblingVertexOffsetWS;
-
-                        //         // vertexOffsetWS = siblingVertexOffsetWS;
-                        //         // vertexPositionWS = siblingVertexPositionWS;
-                        //         // vertexPositionWS = float.NaN;
-
-                        //         ringIntersectsSibling = true;
-                        //     }
-
-                        // }
-
+                        float vertexIntersectionSignedDistanceMin = float.MaxValue;
                         {
-                            if (!ringIntersectsSibling)
+                            for (Int16 edgeIndexSibling = vertexParent.childHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling].next)
                             {
-                                for (Int16 edgeIndexSibling = vertexParent.childHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling].next)
+                                DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
+                                Debug.Assert(edgeSibling.IsValid() == 1);
+                                
+                                if (edgeIndexSibling == edgeIndex)
                                 {
-                                    DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
-                                    Debug.Assert(edgeSibling.IsValid() == 1);
-                                    
-                                    if (edgeIndexSibling == edgeIndex)
-                                    {
-                                        // Ignore ourselves.
-                                        continue;
-                                    }
-
-                                    // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
-                                    Int16 siblingVertexIndexChild = edgeSibling.vertexIndex;
-                                    Debug.Assert(siblingVertexIndexChild != -1);
-
-                                    Int16 siblingVertexIndexParent = splineGraph.edgePoolParents.data[edgeIndexSibling].vertexIndex;
-                                    Debug.Assert(siblingVertexIndexParent != -1);
-
-                                    SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
-                                    SplineMath.Spline splineLeashSibling = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndexSibling];
-                                    quaternion siblingRotationParent = splineGraph.payload.rotations.data[siblingVertexIndexParent];
-                                    quaternion siblingRotationChild = splineGraph.payload.rotations.data[siblingVertexIndexChild];
-
-                                    SplineMath.FindTFromClosestPointOnSpline(out float siblingClosestT, out float siblingClosestDistance, vertexPositionWS, splineSibling);
-
-                                    float3 siblingPositionOnSpline = SplineMath.EvaluatePositionFromT(splineSibling, siblingClosestT);
-                                    quaternion siblingRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(splineSibling, siblingRotationParent, siblingRotationChild, siblingClosestT);
-                                    float2 siblingLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeashSibling, siblingClosestT).xy;
-
-                                    if (math.length(math.mul(math.inverse(siblingRotationOnSpline), vertexPositionWS - siblingPositionOnSpline).xy / leashMaxOS) < 1.0f)
-                                    {
-                                        ringIntersectsSibling = true;
-                                        break;
-                                    }
+                                    // Ignore ourselves.
+                                    continue;
                                 }
+
+                                // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
+                                Int16 siblingVertexIndexChild = edgeSibling.vertexIndex;
+                                Debug.Assert(siblingVertexIndexChild != -1);
+
+                                Int16 siblingVertexIndexParent = splineGraph.edgePoolParents.data[edgeIndexSibling].vertexIndex;
+                                Debug.Assert(siblingVertexIndexParent != -1);
+
+                                SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
+                                SplineMath.Spline splineLeashSibling = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndexSibling];
+                                quaternion siblingRotationParent = splineGraph.payload.rotations.data[siblingVertexIndexParent];
+                                quaternion siblingRotationChild = splineGraph.payload.rotations.data[siblingVertexIndexChild];
+
+                                SplineMath.FindTFromClosestPointOnSpline(out float siblingClosestT, out float siblingClosestDistance, vertexPositionWS, splineSibling);
+
+                                float3 siblingPositionOnSpline = SplineMath.EvaluatePositionFromT(splineSibling, siblingClosestT);
+                                quaternion siblingRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(splineSibling, siblingRotationParent, siblingRotationChild, siblingClosestT);
+                                float2 siblingLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeashSibling, siblingClosestT).xy;
+
+                                float vertexIntersectionSignedDistance = math.length(math.mul(math.inverse(siblingRotationOnSpline), vertexPositionWS - siblingPositionOnSpline).xy / siblingLeashMaxOS) - 1.0f;
+                                vertexIntersectionSignedDistanceMin = math.min(vertexIntersectionSignedDistanceMin, vertexIntersectionSignedDistance);
                             }
 
-                            if (!ringIntersectsSibling)
+                            for (Int16 edgeIndexSibling = vertexChild.parentHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolParents.data[edgeIndexSibling].next)
                             {
-                                for (Int16 edgeIndexSibling = vertexChild.parentHead; edgeIndexSibling != -1; edgeIndexSibling = splineGraph.edgePoolParents.data[edgeIndexSibling].next)
+                                DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
+                                Debug.Assert(edgeSibling.IsValid() == 1);
+                                
+                                if (edgeIndexSibling == edgeIndex)
                                 {
-                                    DirectedEdge edgeSibling = splineGraph.edgePoolChildren.data[edgeIndexSibling];
-                                    Debug.Assert(edgeSibling.IsValid() == 1);
-                                    
-                                    if (edgeIndexSibling == edgeIndex)
-                                    {
-                                        // Ignore ourselves.
-                                        continue;
-                                    }
-
-                                    // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
-                                    Int16 siblingVertexIndexParent = edgeSibling.vertexIndex;
-                                    Debug.Assert(siblingVertexIndexParent != -1);
-
-                                    Int16 siblingVertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndexSibling].vertexIndex;
-                                    Debug.Assert(siblingVertexIndexChild != -1);
-
-                                    SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
-                                    SplineMath.Spline splineLeashSibling = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndexSibling];
-                                    quaternion siblingRotationParent = splineGraph.payload.rotations.data[siblingVertexIndexParent];
-                                    quaternion siblingRotationChild = splineGraph.payload.rotations.data[siblingVertexIndexChild];
-
-                                    SplineMath.FindTFromClosestPointOnSpline(out float siblingClosestT, out float siblingClosestDistance, vertexPositionWS, splineSibling);
-
-                                    float3 siblingPositionOnSpline = SplineMath.EvaluatePositionFromT(splineSibling, siblingClosestT);
-                                    quaternion siblingRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(splineSibling, siblingRotationParent, siblingRotationChild, siblingClosestT);
-                                    float2 siblingLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeashSibling, siblingClosestT).xy;
-
-                                    if (math.length(math.mul(math.inverse(siblingRotationOnSpline), vertexPositionWS - siblingPositionOnSpline).xy / leashMaxOS) < 1.0f)
-                                    {
-                                        ringIntersectsSibling = true;
-                                        break;
-                                    }
+                                    // Ignore ourselves.
+                                    continue;
                                 }
+
+                                // Found our sibling edge. Only use the first one, as we only currently support CSG against a single branch.
+                                Int16 siblingVertexIndexParent = edgeSibling.vertexIndex;
+                                Debug.Assert(siblingVertexIndexParent != -1);
+
+                                Int16 siblingVertexIndexChild = splineGraph.edgePoolChildren.data[edgeIndexSibling].vertexIndex;
+                                Debug.Assert(siblingVertexIndexChild != -1);
+
+                                SplineMath.Spline splineSibling = splineGraph.payload.edgeParentToChildSplines.data[edgeIndexSibling];
+                                SplineMath.Spline splineLeashSibling = splineGraph.payload.edgeParentToChildSplinesLeashes.data[edgeIndexSibling];
+                                quaternion siblingRotationParent = splineGraph.payload.rotations.data[siblingVertexIndexParent];
+                                quaternion siblingRotationChild = splineGraph.payload.rotations.data[siblingVertexIndexChild];
+
+                                SplineMath.FindTFromClosestPointOnSpline(out float siblingClosestT, out float siblingClosestDistance, vertexPositionWS, splineSibling);
+
+                                float3 siblingPositionOnSpline = SplineMath.EvaluatePositionFromT(splineSibling, siblingClosestT);
+                                quaternion siblingRotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(splineSibling, siblingRotationParent, siblingRotationChild, siblingClosestT);
+                                float2 siblingLeashMaxOS = SplineMath.EvaluatePositionFromT(splineLeashSibling, siblingClosestT).xy;
+
+                                float vertexIntersectionSignedDistance = math.length(math.mul(math.inverse(siblingRotationOnSpline), vertexPositionWS - siblingPositionOnSpline).xy / siblingLeashMaxOS) - 1.0f;
+                                vertexIntersectionSignedDistanceMin = math.min(vertexIntersectionSignedDistanceMin, vertexIntersectionSignedDistance);
                             }
-                            
                         }
 
                         vertices[meshVertexIndex] = vertexPositionWS;
@@ -408,14 +317,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                         );
                         normals[meshVertexIndex] = math.normalize(vertexOffsetWS);
 
-                        ++meshVertexIndex;
-                    }
+                        float vertexIntersectionDistanceFade = math.smoothstep(vertexIntersectionSignedDistanceFadeMin, vertexIntersectionSignedDistanceFadeMax, vertexIntersectionSignedDistanceMin);
+                        colors[meshVertexIndex] = new Color(vertexIntersectionDistanceFade, vertexIntersectionDistanceFade, vertexIntersectionDistanceFade, vertexIntersectionDistanceFade);
 
-                    if (ringIntersectsSibling)
-                    {
-                        // Delete entire ring if any vertices intersect their sibling.
-                        meshVertexIndex -= radialEdgeCount;
-                        meshTriangleIndex -= radialEdgeCount * 6;
+                        ++meshVertexIndex;
                     }
                 }
                 
@@ -425,11 +330,13 @@ namespace Pastasfuture.SplineGraph.Runtime
             Vector3[] verticesTrimmed = new Vector3[meshVertexIndex];
             Vector2[] uvsTrimmed = new Vector2[meshVertexIndex];
             Vector3[] normalsTrimmed = new Vector3[meshVertexIndex];
+            Color[] colorsTrimmed = new Color[meshVertexIndex];
             int[] trianglesTrimmed = new int[meshTriangleIndex];
 
             Array.Copy(vertices, verticesTrimmed, meshVertexIndex);
             Array.Copy(uvs, uvsTrimmed, meshVertexIndex);
             Array.Copy(normals, normalsTrimmed, meshVertexIndex);
+            Array.Copy(colors, colorsTrimmed, meshVertexIndex);
             Array.Copy(triangles, trianglesTrimmed, meshTriangleIndex);
 
             // Finally assign back data (causes GC allocs).
@@ -437,6 +344,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             mesh.vertices = verticesTrimmed;
             mesh.uv = uvsTrimmed;
             mesh.normals = normalsTrimmed;
+            mesh.colors = colorsTrimmed;
             mesh.triangles = trianglesTrimmed;
             meshFilter.sharedMesh = mesh;
 
