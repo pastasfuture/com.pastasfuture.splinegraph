@@ -1201,8 +1201,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 nextT = ComputeTFromDelta(spline, nextT, state.distance * sampleCountInverse);
             }
-            Debug.Assert(nextT <= 1.0f);
-            nextT = math.saturate(nextT); // saturate is not strictly necessary - it is simply performed to clean up precision issues.
+            // saturate is needed to clean up precision issues.
+            // Marching along the spline via ComputeTFromDelta approximately works given high sample counts.
+            // Still, it is not precise. Occasionally we can march past the end of the spline.
+            nextT = math.saturate(nextT);
             state = new SplineGraphIteratorState
             {
                 distance = 0.0f,
