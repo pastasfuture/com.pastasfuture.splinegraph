@@ -622,6 +622,21 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
         [BurstCompile]
+        public static float ComputeTFromDeltaIntegrate(Spline spline, float t, float delta, int sampleCount)
+        {
+            Debug.Assert(sampleCount > 0);
+
+            float sampleCountInverse = 1.0f / (float)sampleCount;
+            float nextT = t;
+            for (int s = 0; s < sampleCount; ++s)
+            {
+                nextT = ComputeTFromDelta(spline, nextT, delta * sampleCountInverse);
+            }
+
+            return nextT;
+        }
+
+        [BurstCompile]
         public static void NormalizeSplinesFollowState(ref SplinesFollowState state, int splinesCount)
         {
             float indexFloat = (float)state.index + state.t;

@@ -534,43 +534,48 @@ namespace Pastasfuture.SplineGraph.Runtime
                     }
                     selectedIndices.Clear();
 
-                    // Rather than splitting the edges in a single pass, we split them in two passes.
-                    // This allows us to first make as much space as possible for new edges, which may help with fragmentation.
-                    for (Int16 i = 0, iCount = (Int16)scratchIndices.Count; i < iCount; i += 2)
-                    {
-                        Int16 vertexParentIndex = scratchIndices[i + 0];
-                        Int16 vertexChildIndex = scratchIndices[i + 1];
-
-                        sgc.splineGraph.EdgeRemove(vertexParentIndex, vertexChildIndex);
-                    }
-
                     for (Int16 i = 0, iCount = (Int16)scratchIndices.Count; i < iCount; i += 2)
                     {
                         Int16 vertexParentIndex = scratchIndices[i + 0];
                         Int16 vertexChildIndex = scratchIndices[i + 1];
 
                         Int16 vertexSplitIndex = sgc.splineGraph.VertexAdd(Allocator.Persistent);
-                        sgc.splineGraph.payload.positions.data[vertexSplitIndex] = math.lerp(
-                            sgc.splineGraph.payload.positions.data[vertexParentIndex],
-                            sgc.splineGraph.payload.positions.data[vertexChildIndex],
-                            0.5f
-                        );
-                        sgc.splineGraph.payload.rotations.data[vertexSplitIndex] = math.slerp(
-                            sgc.splineGraph.payload.rotations.data[vertexParentIndex],
-                            sgc.splineGraph.payload.rotations.data[vertexChildIndex],
-                            0.5f
-                        );
-                        sgc.splineGraph.payload.scales.data[vertexSplitIndex] = math.lerp(
-                            sgc.splineGraph.payload.scales.data[vertexParentIndex],
-                            sgc.splineGraph.payload.scales.data[vertexChildIndex],
-                            0.5f
-                        );
-                        sgc.splineGraph.payload.leashes.data[vertexSplitIndex] = math.lerp(
-                            sgc.splineGraph.payload.leashes.data[vertexParentIndex],
-                            sgc.splineGraph.payload.leashes.data[vertexChildIndex],
-                            0.5f
-                        );
 
+                        {
+                            Int16 edgeIndexPrevious = sgc.splineGraph.EdgeFindIndex(vertexParentIndex, vertexChildIndex);
+                            SplineMath.Spline spline = sgc.splineGraph.payload.edgeParentToChildSplines.data[edgeIndexPrevious];
+                            float edgeLength = sgc.splineGraph.payload.edgeLengths.data[edgeIndexPrevious];
+                            float t = SplineMath.ComputeTFromDeltaIntegrate(spline, 0.0f, edgeLength * 0.5f, sampleCount: 32);
+
+                            SplineMath.ComputePositionRotationLeashFromT(
+                                out float3 position,
+                                out quaternion rotation,
+                                out float2 leash,
+                                vertexParentIndex,
+                                vertexChildIndex,
+                                edgeIndexPrevious,
+                                t,
+                                sgc.splineGraph.payload.positions.data,
+                                sgc.splineGraph.payload.rotations.data,
+                                sgc.splineGraph.payload.leashes.data,
+                                sgc.splineGraph.payload.edgeParentToChildSplines.data,
+                                sgc.splineGraph.payload.edgeParentToChildSplinesLeashes.data
+                            );
+
+                            sgc.splineGraph.payload.positions.data[vertexSplitIndex] = position;
+                            sgc.splineGraph.payload.rotations.data[vertexSplitIndex] = rotation;
+                            sgc.splineGraph.payload.scales.data[vertexSplitIndex] = math.lerp(
+                                sgc.splineGraph.payload.scales.data[vertexParentIndex],
+                                sgc.splineGraph.payload.scales.data[vertexChildIndex],
+                                0.5f
+                            ) * 0.5f;
+                            sgc.splineGraph.payload.leashes.data[vertexSplitIndex] = leash;
+
+                            sgc.splineGraph.payload.scales.data[vertexParentIndex] = sgc.splineGraph.payload.scales.data[vertexParentIndex] * new float2(1.0f, 0.5f);
+                            sgc.splineGraph.payload.scales.data[vertexChildIndex] = sgc.splineGraph.payload.scales.data[vertexChildIndex] * new float2(0.5f, 1.0f);
+                        }
+                        
+                        sgc.splineGraph.EdgeRemove(vertexParentIndex, vertexChildIndex);
                         sgc.splineGraph.EdgeAdd(vertexParentIndex, vertexSplitIndex, Allocator.Persistent);
                         sgc.splineGraph.EdgeAdd(vertexSplitIndex, vertexChildIndex, Allocator.Persistent);
                         selectedIndices.Add(vertexSplitIndex);
