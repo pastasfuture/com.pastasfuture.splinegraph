@@ -393,6 +393,8 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         private bool isExtruding = false;
 
+        private List<Int16> scratchIndices = new List<Int16>(128);
+
         private static DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> copyScratchWS;
 
         public override void OnInspectorGUI()
@@ -498,6 +500,83 @@ namespace Pastasfuture.SplineGraph.Runtime
                     selectedIndices.Clear();
                     selectionType = SelectionType.Vertex;
                     selectedIndices.Add(vertexParent);
+                    Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+                }
+            }
+
+            if (GUILayout.Button("Split Edge Between Selected Vertices"))
+            {
+                if ((selectionType == SelectionType.Vertex) && (selectedIndices.Count > 1))
+                {
+                    sgc.UndoRecord("Spline Graph Split Edge", true);
+
+                    scratchIndices.Clear();
+                    for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                    {
+                        Int16 vertexParentCandidateIndex = selectedIndices[i];
+                        DirectedVertex vertexParentCandidate = sgc.splineGraph.vertices.data[vertexParentCandidateIndex];
+                        Debug.Assert(vertexParentCandidate.IsValid() == 1);
+
+                        for (Int16 j = 0; j < iCount; ++j)
+                        {
+                            if (i == j) { continue; }
+                            Int16 vertexChildCandidateIndex = selectedIndices[j];
+                            DirectedVertex vertexChildCandidate = sgc.splineGraph.vertices.data[vertexChildCandidateIndex];
+                            Debug.Assert(vertexChildCandidate.IsValid() == 1);
+
+                            if (sgc.splineGraph.EdgeContains(vertexParentCandidateIndex, vertexChildCandidateIndex) == 1)
+                            {
+                                // Found a parent, child pair.
+                                scratchIndices.Add(vertexParentCandidateIndex);
+                                scratchIndices.Add(vertexChildCandidateIndex);
+                            }
+                        }
+                    }
+                    selectedIndices.Clear();
+
+                    // Rather than splitting the edges in a single pass, we split them in two passes.
+                    // This allows us to first make as much space as possible for new edges, which may help with fragmentation.
+                    for (Int16 i = 0, iCount = (Int16)scratchIndices.Count; i < iCount; i += 2)
+                    {
+                        Int16 vertexParentIndex = scratchIndices[i + 0];
+                        Int16 vertexChildIndex = scratchIndices[i + 1];
+
+                        sgc.splineGraph.EdgeRemove(vertexParentIndex, vertexChildIndex);
+                    }
+
+                    for (Int16 i = 0, iCount = (Int16)scratchIndices.Count; i < iCount; i += 2)
+                    {
+                        Int16 vertexParentIndex = scratchIndices[i + 0];
+                        Int16 vertexChildIndex = scratchIndices[i + 1];
+
+                        Int16 vertexSplitIndex = sgc.splineGraph.VertexAdd(Allocator.Persistent);
+                        sgc.splineGraph.payload.positions.data[vertexSplitIndex] = math.lerp(
+                            sgc.splineGraph.payload.positions.data[vertexParentIndex],
+                            sgc.splineGraph.payload.positions.data[vertexChildIndex],
+                            0.5f
+                        );
+                        sgc.splineGraph.payload.rotations.data[vertexSplitIndex] = math.slerp(
+                            sgc.splineGraph.payload.rotations.data[vertexParentIndex],
+                            sgc.splineGraph.payload.rotations.data[vertexChildIndex],
+                            0.5f
+                        );
+                        sgc.splineGraph.payload.scales.data[vertexSplitIndex] = math.lerp(
+                            sgc.splineGraph.payload.scales.data[vertexParentIndex],
+                            sgc.splineGraph.payload.scales.data[vertexChildIndex],
+                            0.5f
+                        );
+                        sgc.splineGraph.payload.leashes.data[vertexSplitIndex] = math.lerp(
+                            sgc.splineGraph.payload.leashes.data[vertexParentIndex],
+                            sgc.splineGraph.payload.leashes.data[vertexChildIndex],
+                            0.5f
+                        );
+
+                        sgc.splineGraph.EdgeAdd(vertexParentIndex, vertexSplitIndex, Allocator.Persistent);
+                        sgc.splineGraph.EdgeAdd(vertexSplitIndex, vertexChildIndex, Allocator.Persistent);
+                        selectedIndices.Add(vertexSplitIndex);
+                    }
+
+                    scratchIndices.Clear();
                     Repaint(); // Repaint editor to display selection changes in InspectorGUI.
                 }
             }
@@ -888,6 +967,10 @@ namespace Pastasfuture.SplineGraph.Runtime
                 float3 rotationOffsetOriginOS = new float3(0.0f, 0.0f, 0.0f);
                 float2 scaleOffsetOS = new float2(1.0f, 1.0f);
                 float2 leashOffsetOS = new float2(0.0f, 0.0f);
+                float tangentHandleOffsetScalar = 0.0f;
+                float tangentHandleSign = 0.0f;
+                float bitangentHandleOffsetScalar = 0.0f;
+                float bitangentHandleSign = 0.0f;
                 for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
                 {
                     Int16 selectedVertexIndex = selectedIndices[i];
@@ -964,6 +1047,56 @@ namespace Pastasfuture.SplineGraph.Runtime
                                 // Under multi-selection, leashOffsetOS will be the same for all points being transformed.
                                 isDone = true;
                             }
+                        }
+
+                        if (isDone) { break; }
+
+                        {
+                            float handleSize = HandleUtility.GetHandleSize(vertexPositionOS) * 0.25f;
+
+                            Color handleColorPrevious = Handles.color;
+
+                            Handles.color = Color.red;
+                            for (int s = 0; s < 2; ++s)
+                            {
+                                float sign = (s == 0) ? -1.0f : 1.0f;
+
+                                float3 tangentWS = math.mul(vertexRotationOS, new float3(sign, 0.0f, 0.0f));
+                                float3 tangentHandlePositionWS = vertexLeashOS.x * tangentWS + vertexPositionOS;
+                                float3 tangentHandlePositionNewWS = Handles.Slider(tangentHandlePositionWS, tangentWS, handleSize, Handles.ConeHandleCap, 0.1f);
+                            
+                                if (math.any(tangentHandlePositionNewWS != tangentHandlePositionWS))
+                                {
+                                    tangentHandleOffsetScalar = math.dot(tangentWS, tangentHandlePositionNewWS - tangentHandlePositionWS);
+
+                                    tangentHandleSign = sign;
+
+                                    // Under multi-selection, leashOffsetOS and positionOffsetOS will be the same for all points being transformed.
+                                    isDone = true;
+                                }
+                            }
+
+                            Handles.color = Color.green;
+                            for (int s = 0; s < 2; ++s)
+                            {
+                                float sign = (s == 0) ? -1.0f : 1.0f;
+
+                                float3 bitangentWS = math.mul(vertexRotationOS, new float3(0.0f, sign, 0.0f));
+                                float3 bitangentHandlePositionWS = vertexLeashOS.y * bitangentWS + vertexPositionOS;
+                                float3 bitangentHandlePositionNewWS = Handles.Slider(bitangentHandlePositionWS, bitangentWS, handleSize, Handles.ConeHandleCap, 0.1f);
+                            
+                                if (math.any(bitangentHandlePositionNewWS != bitangentHandlePositionWS))
+                                {
+                                    bitangentHandleOffsetScalar = math.dot(bitangentWS, bitangentHandlePositionNewWS - bitangentHandlePositionWS);
+
+                                    bitangentHandleSign = sign;
+
+                                    // Under multi-selection, leashOffsetOS and positionOffsetOS will be the same for all points being transformed.
+                                    isDone = true;
+                                }
+                            }
+                            Handles.color = handleColorPrevious;
+                            
                         }
 
                         if (isDone) { break; }
@@ -1073,13 +1206,40 @@ namespace Pastasfuture.SplineGraph.Runtime
                         {
                             Int16 selectedVertexIndex = selectedIndices[i];
 
-                            float2 vertexScaleOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
-                            vertexScaleOS *= scaleOffsetOS;
-                            sgc.splineGraph.payload.scales.data[selectedVertexIndex] = vertexScaleOS;
+                            // Position changes can happen if we are dragging on the edge of the leash handles.
+                            // TODO: Could maybe cleanup this code section by adding a notion of feature flags.
+                            if (math.abs(tangentHandleOffsetScalar) > 1e-5f
+                                || math.abs(bitangentHandleOffsetScalar) > 1e-5f)
+                            {
+                                quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
+                                vertexRotationOS = math.mul(rotation, vertexRotationOS);
 
-                            float2 vertexLeashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
-                            vertexLeashOS = math.max(0.0f, vertexLeashOS + leashOffsetOS);
-                            sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = vertexLeashOS;
+                                float3 tangentWS = math.mul(vertexRotationOS, new float3(tangentHandleSign, 0.0f, 0.0f));
+                                float3 bitangentWS = math.mul(vertexRotationOS, new float3(0.0f, bitangentHandleSign, 0.0f));
+
+                                float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
+                                vertexPositionOS = transform.TransformPoint(vertexPositionOS);
+                                vertexPositionOS += tangentWS * (tangentHandleOffsetScalar * 0.5f);
+                                vertexPositionOS += bitangentWS * (bitangentHandleOffsetScalar * 0.5f);
+                                vertexPositionOS = transform.InverseTransformPoint(vertexPositionOS);
+                                sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
+
+                                float2 vertexLeashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
+                                vertexLeashOS = math.max(0.0f, vertexLeashOS + new float2(tangentHandleOffsetScalar * 0.5f, bitangentHandleOffsetScalar * 0.5f));
+                                sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = vertexLeashOS;
+                            }
+                            else
+                            {
+                                // Standard scale tool.
+                                float2 vertexScaleOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
+                                vertexScaleOS *= scaleOffsetOS;
+                                sgc.splineGraph.payload.scales.data[selectedVertexIndex] = vertexScaleOS;
+
+                                float2 vertexLeashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
+                                vertexLeashOS = math.max(0.0f, vertexLeashOS + leashOffsetOS);
+                                sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = vertexLeashOS;
+                            }
+                            
                         }
 
                         for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
