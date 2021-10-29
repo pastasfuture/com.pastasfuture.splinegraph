@@ -17,6 +17,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         [System.NonSerialized] public bool isRenderingEnabled = false;
         [System.NonSerialized] public bool isAutoUpdateEnabled = false;
         public int type = 0;
+        public SplineGraphUserBlobSchemaScriptableObject splineGraphUserBlobSchema = null;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
         public int gizmoSplineSegmentCount = 4;
@@ -79,6 +80,23 @@ namespace Pastasfuture.SplineGraph.Runtime
                 // Debug.Log(splineGraph.payload.positions.count);
             }
 
+            if (splineGraphUserBlobSchema != null)
+            {
+                if (splineGraphUserBlobSchema.GetVersion() > splineGraph.payload.userBlobSchemaVersion)
+                {
+                    splineGraphUserBlobSchema.Migrate(ref splineGraph, Allocator.Persistent);
+                    isDirty = true;
+                }
+            }
+            else
+            {
+                if (splineGraph.payload.userBlobSchemaVersion != 0)
+                {
+                    splineGraph.payload.ClearSchema();
+                    isDirty = true;
+                }
+            }
+
             if (isDirty)
             {
                 isDirty = false;
@@ -125,7 +143,11 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             Verify();
 
-            var splineGraphCompact = new DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable>(Allocator.Persistent); 
+            var splineGraphCompact = new DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable>(Allocator.Persistent);
+            if (splineGraph.payload.userBlobSchemaVersion != 0)
+            {
+                splineGraphCompact.payload.SetSchema(ref splineGraph.payload.userBlobVertex.schema, ref splineGraph.payload.userBlobEdge.schema, splineGraph.payload.userBlobSchemaVersion, Allocator.Persistent);
+            }
             splineGraph.BuildCompactDirectedGraph(ref splineGraphCompact, Allocator.Persistent);
             splineGraph.Dispose();
             splineGraph = splineGraphCompact;
@@ -347,6 +369,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             Verify();
 
             splineGraph.Clear();
+            if (splineGraphUserBlobSchema != null)
+            {
+                NativeArray<SplineGraphUserBlob.Scheme> schemaVertex = default;
+                splineGraphUserBlobSchema.CopyVertexSchema(ref schemaVertex, Allocator.Temp);
+                NativeArray<SplineGraphUserBlob.Scheme> schemaEdge = default;
+                splineGraphUserBlobSchema.CopyEdgeSchema(ref schemaEdge, Allocator.Temp);
+                splineGraph.payload.SetSchema(ref schemaVertex, ref schemaEdge, splineGraphUserBlobSchema.GetVersion(), Allocator.Persistent);
+                schemaVertex.Dispose();
+                schemaEdge.Dispose();
+            }
 
             // 1) Append all graphs into single graph.
             for (int i = 0, iCount = SplineGraphComponent.instances.Count; i < iCount; ++i)
@@ -355,6 +387,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 instance.Verify();
 
                 if (instance.type != type) { continue; }
+                if (instance.splineGraphUserBlobSchema != splineGraphUserBlobSchema) { continue; }
 
                 Int16 vertexStart = (Int16)splineGraph.vertices.count;
                 splineGraph.PushDirectedGraph(ref instance.splineGraph, Allocator.Persistent);
@@ -409,14 +442,15 @@ namespace Pastasfuture.SplineGraph.Runtime
 
             }
 
+            // TODO: MAKE WELDING RESPECT USER BLOB VALUES.
             // 2) Weld vertices.
-            VertexWeldAllWithinThreshold();
+            //VertexWeldAllWithinThreshold();
 
             // 3)
-            VertexWeldAllRedundant();
+            //VertexWeldAllRedundant();
 
             // 4) Compact.
-            BuildCompactGraph();
+            //BuildCompactGraph();
 
             // Need to set the dirty flag here because the call to Verify() above cleared any dirty flags that were possibly set by UndoRecord()
             // and we have just changed our runtime data representation.
@@ -546,6 +580,21 @@ namespace Pastasfuture.SplineGraph.Runtime
                 return;
             }
 
+            var splineGraphUserBlobSchemaNext = EditorGUILayout.ObjectField("User Blob Schema", sgm.splineGraphUserBlobSchema, typeof(SplineGraphUserBlobSchemaScriptableObject), false) as SplineGraphUserBlobSchemaScriptableObject;
+            if (splineGraphUserBlobSchemaNext != sgm.splineGraphUserBlobSchema)
+            {
+                sgm.UndoRecord("Edited Spline Graph Manager User Blob Schema");
+                sgm.splineGraphUserBlobSchema = splineGraphUserBlobSchemaNext;
+
+                NativeArray<SplineGraphUserBlob.Scheme> schemaVertex = default;
+                splineGraphUserBlobSchemaNext.CopyVertexSchema(ref schemaVertex, Allocator.Temp);
+                NativeArray<SplineGraphUserBlob.Scheme> schemaEdge = default;
+                splineGraphUserBlobSchemaNext.CopyEdgeSchema(ref schemaEdge, Allocator.Temp);
+                sgm.splineGraph.payload.SetSchema(ref schemaVertex, ref schemaEdge, splineGraphUserBlobSchemaNext.GetVersion(), Allocator.Persistent);
+                schemaVertex.Dispose();
+                schemaEdge.Dispose();
+            }
+
             bool isRenderingEnabledNew = EditorGUILayout.Toggle("Is Rendering Enabled", sgm.isRenderingEnabled);
             if (isRenderingEnabledNew != sgm.isRenderingEnabled)
             {
@@ -588,30 +637,33 @@ namespace Pastasfuture.SplineGraph.Runtime
                 return;
             }
 
-            for (Int16 v = 0, vCount = (Int16)sgm.splineGraph.vertices.count; v < vCount; ++v)
+            using (new EditorGUI.DisabledScope(true))
             {
-                DirectedVertex vertex = sgm.splineGraph.vertices.data[v];
-                if (vertex.IsValid() == 0) { continue; }
+                for (Int16 v = 0, vCount = (Int16)sgm.splineGraph.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = sgm.splineGraph.vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
 
-                EditorGUILayout.BeginVertical();
+                    EditorGUILayout.BeginVertical();
 
-                // TODO: Convert these input fields to read-only fields.
-                float3 position = sgm.splineGraph.payload.positions.data[v];
-                EditorGUILayout.Vector3Field("Position", position);
+                    // TODO: Convert these input fields to read-only fields.
+                    float3 position = sgm.splineGraph.payload.positions.data[v];
+                    EditorGUILayout.Vector3Field("Position", position);
 
-                quaternion rotation = sgm.splineGraph.payload.rotations.data[v];
-                float3 rotationEulerDegrees = ((Quaternion)rotation).eulerAngles;
-                EditorGUILayout.Vector3Field("Rotation", rotationEulerDegrees);
+                    quaternion rotation = sgm.splineGraph.payload.rotations.data[v];
+                    float3 rotationEulerDegrees = ((Quaternion)rotation).eulerAngles;
+                    EditorGUILayout.Vector3Field("Rotation", rotationEulerDegrees);
 
-                float2 scale = sgm.splineGraph.payload.scales.data[v];
-                EditorGUILayout.Vector2Field("Scale", scale);
+                    float2 scale = sgm.splineGraph.payload.scales.data[v];
+                    EditorGUILayout.Vector2Field("Scale", scale);
 
-                float2 leash = sgm.splineGraph.payload.leashes.data[v];
-                EditorGUILayout.Vector2Field("Leash", leash);
+                    float2 leash = sgm.splineGraph.payload.leashes.data[v];
+                    EditorGUILayout.Vector2Field("Leash", leash);
 
-                EditorGUILayout.EndVertical();
+                    EditorGUILayout.EndVertical();
+                }
             }
-
+            
             EditorGUILayout.EndVertical();
 
             serializedObject.ApplyModifiedProperties();

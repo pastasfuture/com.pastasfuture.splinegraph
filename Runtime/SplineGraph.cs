@@ -20,9 +20,14 @@ namespace Pastasfuture.SplineGraph.Runtime
             count = 0;
         }
 
+        public int Capacity()
+        {
+            return data.IsCreated ? data.Length : 0;
+        }
+
         public void Dispose()
         {
-            if (data.Length > 0) { data.Dispose(); }
+            if (data.IsCreated) { data.Dispose(); }
             Clear();
         }
 
@@ -33,12 +38,12 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         public void Ensure(int capacityRequested, Allocator allocator)
         {
-            if (data.Length >= capacityRequested) { return; }
+            if (Capacity() >= capacityRequested) { return; }
 
             NativeArray<T> dataNext = new NativeArray<T>(capacityRequested, allocator);
-            if (data.Length > 0)
+            if (Capacity() > 0)
             {
-                NativeArray<T>.Copy(data, dataNext, data.Length);
+                NativeArray<T>.Copy(data, dataNext, Capacity());
                 data.Dispose();
             }
             data = dataNext;
@@ -178,6 +183,11 @@ namespace Pastasfuture.SplineGraph.Runtime
         public SplineMath.Spline[] edgeChildToParentSplinesLeashes;
         public float[] edgeLengths;
         public float3[] edgeBounds;
+        public int userBlobSchemaVersion;
+        public SplineGraphUserBlob.Scheme[] userBlobVertexSchema;
+        public SplineGraphUserBlob.Value[] userBlobVertexData;
+        public SplineGraphUserBlob.Scheme[] userBlobEdgeSchema;
+        public SplineGraphUserBlob.Value[] userBlobEdgeData;
     }
 
     public struct SplineGraphPayload : IDirectedGraphPayload<SplineGraphPayload, SplineGraphPayloadSerializable>
@@ -198,6 +208,10 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         public static readonly int EDGE_BOUNDS_STRIDE = 2;
 
+        public int userBlobSchemaVersion;
+        public SplineGraphUserBlob.NativeSchemaBlob userBlobVertex;
+        public SplineGraphUserBlob.NativeSchemaBlob userBlobEdge;
+
         public void Create(out SplineGraphPayload res, Allocator allocator)
         {
             // TODO: Fill these out with sensible default sizes.
@@ -212,6 +226,45 @@ namespace Pastasfuture.SplineGraph.Runtime
             res.edgeChildToParentSplinesLeashes = new NativeArrayDynamic<SplineMath.Spline>(1, allocator);
             res.edgeLengths = new NativeArrayDynamic<float>(1, allocator);
             res.edgeBounds = new NativeArrayDynamic<float3>(1 * EDGE_BOUNDS_STRIDE, allocator);
+
+            res.userBlobSchemaVersion = 0;
+            res.userBlobVertex = SplineGraphUserBlob.NativeSchemaBlob.zero;
+            res.userBlobEdge = SplineGraphUserBlob.NativeSchemaBlob.zero;
+        }
+
+        public void SetSchema(ref NativeArray<SplineGraphUserBlob.Scheme> schemaVertex, ref NativeArray<SplineGraphUserBlob.Scheme> schemaEdge, int schemaVersion, Allocator allocator)
+        {
+            userBlobSchemaVersion = schemaVersion;
+            if (userBlobVertex.IsCreated) { userBlobVertex.Dispose(); }
+            if (userBlobEdge.IsCreated) { userBlobEdge.Dispose(); }
+
+            userBlobVertex = new SplineGraphUserBlob.NativeSchemaBlob(ref schemaVertex, positions.Capacity(), allocator);
+            userBlobEdge = new SplineGraphUserBlob.NativeSchemaBlob(ref schemaEdge, edgeParentToChildSplines.Capacity(), allocator);
+
+            userBlobVertex.count = positions.count;
+            userBlobEdge.count = edgeParentToChildSplines.count;
+        }
+
+        public void ClearSchema()
+        {
+            userBlobSchemaVersion = 0;
+            if (userBlobVertex.IsCreated) { userBlobVertex.Dispose(); }
+            if (userBlobEdge.IsCreated) { userBlobEdge.Dispose(); }
+            userBlobVertex = SplineGraphUserBlob.NativeSchemaBlob.zero;
+            userBlobEdge = SplineGraphUserBlob.NativeSchemaBlob.zero;
+        }
+
+        public void SetSchema(SplineGraphUserBlob.Scheme[] schemaVertex, SplineGraphUserBlob.Scheme[] schemaEdge, int schemaVersion, Allocator allocator)
+        {
+            userBlobSchemaVersion = schemaVersion;
+            if (userBlobVertex.IsCreated) { userBlobVertex.Dispose(); }
+            if (userBlobEdge.IsCreated) { userBlobEdge.Dispose(); }
+
+            userBlobVertex = new SplineGraphUserBlob.NativeSchemaBlob(schemaVertex, positions.Capacity(), allocator);
+            userBlobEdge = new SplineGraphUserBlob.NativeSchemaBlob(schemaEdge, edgeParentToChildSplines.Capacity(), allocator);
+
+            userBlobVertex.count = positions.count;
+            userBlobEdge.count = edgeParentToChildSplines.count;
         }
 
         public void Dispose()
@@ -226,6 +279,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.Dispose();
             edgeLengths.Dispose();
             edgeBounds.Dispose();
+
+            userBlobSchemaVersion = 0;
+            userBlobVertex.Dispose();
+            userBlobEdge.Dispose();
         }
 
         public void Clear()
@@ -240,6 +297,10 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.Clear();
             edgeLengths.Clear();
             edgeBounds.Clear();
+
+            // Warning: Intentionally not clearing the schemas, just the data.
+            userBlobVertex.Clear();
+            userBlobEdge.Clear();
         }
 
         public void Copy(ref SplineGraphPayload src, ref SplineGraphPayload dst, Allocator allocator)
@@ -254,6 +315,13 @@ namespace Pastasfuture.SplineGraph.Runtime
             NativeArrayDynamic<SplineMath.Spline>.Copy(ref src.edgeChildToParentSplinesLeashes, ref dst.edgeChildToParentSplinesLeashes, src.edgeChildToParentSplinesLeashes.count, allocator);
             NativeArrayDynamic<float>.Copy(ref src.edgeLengths, ref dst.edgeLengths, src.edgeLengths.count, allocator);
             NativeArrayDynamic<float3>.Copy(ref src.edgeBounds, ref dst.edgeBounds, src.edgeBounds.count, allocator);
+
+            if (src.userBlobSchemaVersion != 0)
+            {
+                dst.SetSchema(ref src.userBlobVertex.schema, ref src.userBlobEdge.schema, src.userBlobSchemaVersion, allocator);
+                SplineGraphUserBlob.NativeSchemaBlob.Copy(ref src.userBlobVertex, ref dst.userBlobVertex, src.userBlobVertex.count, allocator);
+                SplineGraphUserBlob.NativeSchemaBlob.Copy(ref src.userBlobEdge, ref dst.userBlobEdge, src.userBlobEdge.count, allocator);
+            }
         }
 
         public void Serialize(ref SplineGraphPayloadSerializable o)
@@ -271,6 +339,21 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.ToArray(ref o.edgeChildToParentSplinesLeashes);
             edgeLengths.ToArray(ref o.edgeLengths);
             edgeBounds.ToArray(ref o.edgeBounds);
+
+            if (userBlobSchemaVersion != 0)
+            {
+                o.userBlobSchemaVersion = userBlobSchemaVersion;
+                userBlobVertex.ToArray(ref o.userBlobVertexSchema, ref o.userBlobVertexData);
+                userBlobEdge.ToArray(ref o.userBlobEdgeSchema, ref o.userBlobEdgeData);
+            }
+            else
+            {
+                o.userBlobSchemaVersion = 0;
+                o.userBlobVertexSchema = null;
+                o.userBlobVertexData = null;
+                o.userBlobEdgeSchema = null;
+                o.userBlobEdgeData = null;
+            }
         }
 
         public void Deserialize(ref SplineGraphPayloadSerializable i, Allocator allocator)
@@ -287,29 +370,48 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.FromArray(i.edgeChildToParentSplinesLeashes, allocator);
             edgeLengths.FromArray(i.edgeLengths, allocator);
 
-            int edgeBoundsCountRequested = i.edgeLengths.Length * EDGE_BOUNDS_STRIDE;
-            if ((i.edgeBounds == null) || (i.edgeBounds.Length != edgeBoundsCountRequested))
+            if (i.edgeLengths != null)
             {
-                // Encountered old spline data that was authored before we introduced edgeBounds.
-                // Need to generate data here.
-                // TODO: In the future, we should add some version tracking and standardized migration system.
-                edgeBounds.Ensure(i.edgeLengths.Length * EDGE_BOUNDS_STRIDE, allocator);
-                edgeBounds.count = edgeBoundsCountRequested;
-
-                for (Int16 edgeIndex = 0, edgeCount = (Int16)i.edgeParentToChildSplines.Length; edgeIndex < edgeCount; ++ edgeIndex)
+                int edgeBoundsCountRequested = i.edgeLengths.Length * EDGE_BOUNDS_STRIDE;
+                if ((i.edgeBounds == null) || (i.edgeBounds.Length != edgeBoundsCountRequested))
                 {
-                    SplineMath.Spline edgeParentToChildSpline = edgeParentToChildSplines.data[edgeIndex];
+                    // Encountered old spline data that was authored before we introduced edgeBounds.
+                    // Need to generate data here.
+                    // TODO: In the future, we should add some version tracking and standardized migration system.
+                    edgeBounds.Ensure(i.edgeLengths.Length * EDGE_BOUNDS_STRIDE, allocator);
+                    edgeBounds.count = edgeBoundsCountRequested;
 
-                    SplineMath.ComputeSplineBounds(out float3 aabbMin, out float3 aabbMax, edgeParentToChildSpline);
-                    edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 0] = aabbMin;
-                    edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 1] = aabbMax;
+                    for (Int16 edgeIndex = 0, edgeCount = (Int16)i.edgeParentToChildSplines.Length; edgeIndex < edgeCount; ++edgeIndex)
+                    {
+                        SplineMath.Spline edgeParentToChildSpline = edgeParentToChildSplines.data[edgeIndex];
+
+                        SplineMath.ComputeSplineBounds(out float3 aabbMin, out float3 aabbMax, edgeParentToChildSpline);
+                        edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 0] = aabbMin;
+                        edgeBounds.data[edgeIndex * EDGE_BOUNDS_STRIDE + 1] = aabbMax;
+                    }
+                }
+                else
+                {
+                    edgeBounds.FromArray(i.edgeBounds, allocator);
                 }
             }
-            else
+
+            userBlobSchemaVersion = 0;
+            userBlobVertex = SplineGraphUserBlob.NativeSchemaBlob.zero;
+            userBlobEdge = SplineGraphUserBlob.NativeSchemaBlob.zero;
+            if (i.userBlobSchemaVersion != 0)
             {
-                edgeBounds.FromArray(i.edgeBounds, allocator);
+                // Handle size mismatches. This case can happen if the user blob vertex or edge data is inherited from a prefab,
+                // but the vertex or edge data itself overrides the prefab - meaning the overridden data has not been converted yet.
+                // By leaving the zero initialized user blob data if a mismatch is found, it will automatically get zero filled during migration.
+                int vertexCount = (i.positions == null) ? 0 : i.positions.Length;
+                int edgeCount = (i.edgeParentToChildSplines == null) ? 0 : i.edgeParentToChildSplines.Length;
+                if (userBlobVertex.TryFromArray(vertexCount, i.userBlobVertexSchema, i.userBlobVertexData, allocator)
+                    && userBlobEdge.TryFromArray(edgeCount, i.userBlobEdgeSchema, i.userBlobEdgeData, allocator))
+                {
+                    userBlobSchemaVersion = i.userBlobSchemaVersion;
+                }
             }
-            
         }
 
         public void VertexEnsure(Int16 capacityRequested, Allocator allocator)
@@ -318,6 +420,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             rotations.Ensure(capacityRequested, allocator);
             scales.Ensure(capacityRequested, allocator);
             leashes.Ensure(capacityRequested, allocator);
+
+            if (userBlobSchemaVersion != 0)
+            {
+                userBlobVertex.Ensure(capacityRequested, allocator);
+            }
         }
 
         public void EdgeEnsure(Int16 capacityRequested, Allocator allocator)
@@ -328,6 +435,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeChildToParentSplinesLeashes.Ensure(capacityRequested, allocator);
             edgeLengths.Ensure(capacityRequested, allocator);
             edgeBounds.Ensure(capacityRequested * EDGE_BOUNDS_STRIDE, allocator);
+
+            if (userBlobSchemaVersion != 0)
+            {
+                userBlobEdge.Ensure(capacityRequested, allocator);
+            }
         }
 
         public Int16 VertexPush(Allocator allocator)
@@ -339,6 +451,11 @@ namespace Pastasfuture.SplineGraph.Runtime
             scales.Push(new float2(1.0f, 1.0f), allocator);
             leashes.Push(new float2(0.0f, 0.0f), allocator);
 
+            if (userBlobSchemaVersion != 0)
+            {
+                userBlobVertex.PushZero(allocator);
+            }
+
             return res;
         }
 
@@ -349,12 +466,25 @@ namespace Pastasfuture.SplineGraph.Runtime
             dst.rotations.data[vertexDst] = src.rotations.data[vertexSrc];
             dst.scales.data[vertexDst] = src.scales.data[vertexSrc];
             dst.leashes.data[vertexDst] = src.leashes.data[vertexSrc];
+
+            if (src.userBlobSchemaVersion != 0 && src.userBlobVertex.count > 0)
+            {
+                SplineGraphUserBlob.NativeSchemaBlob.Copy(ref src.userBlobVertex, vertexSrc, ref dst.userBlobVertex, vertexDst, 1);
+            }
         }
 
         // Really, this is static.
         public void VertexSwap(ref SplineGraphPayload src, Int16 vertexSrc, ref SplineGraphPayload dst, Int16 vertexDst)
         {
-            // TODO:
+            (dst.positions.data[vertexDst], src.positions.data[vertexSrc]) = (src.positions.data[vertexSrc], dst.positions.data[vertexDst]);
+            (dst.rotations.data[vertexDst], src.rotations.data[vertexSrc]) = (src.rotations.data[vertexSrc], dst.rotations.data[vertexDst]);
+            (dst.scales.data[vertexDst], src.scales.data[vertexSrc]) = (src.scales.data[vertexSrc], dst.scales.data[vertexDst]);
+            (dst.leashes.data[vertexDst], src.leashes.data[vertexSrc]) = (src.leashes.data[vertexSrc], dst.leashes.data[vertexDst]);
+
+            if (src.userBlobSchemaVersion != 0 && src.userBlobVertex.count > 0)
+            {
+                SplineGraphUserBlob.NativeSchemaBlob.Swap(ref src.userBlobVertex, vertexSrc, ref dst.userBlobVertex, vertexDst);
+            }
         }
 
         public Int16 EdgePush(Allocator allocator)
@@ -368,19 +498,34 @@ namespace Pastasfuture.SplineGraph.Runtime
             edgeLengths.Push(0.0f, allocator);
             edgeBounds.Push(float3.zero, allocator); edgeBounds.Push(float3.zero, allocator);
 
+            if (userBlobSchemaVersion != 0)
+            {
+                userBlobEdge.PushZero(allocator);
+            }
+
             return res;
         }
 
         // Really, this is static.
         public void EdgeCopy(ref SplineGraphPayload src, Int16 edgeSrc, ref SplineGraphPayload dst, Int16 edgeDst)
         {
-            // TODO:
+            // Only the user blob data makes sense to copy.
+            // The remaining edge data is all auto generated during EdgeComputePayloads.
+            if (src.userBlobSchemaVersion != 0 && src.userBlobEdge.count > 0)
+            {
+                SplineGraphUserBlob.NativeSchemaBlob.Copy(ref src.userBlobEdge, edgeSrc, ref dst.userBlobEdge, edgeDst, 1);
+            }
         }
 
         // Really, this is static.
         public void EdgeSwap(ref SplineGraphPayload src, Int16 edgeSrc, ref SplineGraphPayload dst, Int16 edgeDst)
         {
-            // TODO:
+            // Only the user blob data makes sense to swap.
+            // The remaining edge data is all auto generated during EdgeComputePayloads.
+            if (src.userBlobSchemaVersion != 0 && src.userBlobEdge.count > 0)
+            {
+                SplineGraphUserBlob.NativeSchemaBlob.Swap(ref src.userBlobEdge, edgeSrc, ref dst.userBlobEdge, edgeDst);
+            }
         }
 
         public void VertexComputePayloads(ref DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable> graph, Int16 vertexIndex)
@@ -763,7 +908,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             payload.EdgeComputePayloads(ref this, vertexParent, vertexChild);
         }
 
-        public void EdgeAdd(Int16 vertexParent, Int16 vertexChild, Allocator allocator)
+        public Int16 EdgeAdd(Int16 vertexParent, Int16 vertexChild, Allocator allocator)
         {
             Debug.Assert(vertexParent >= 0 && vertexParent < vertices.count, "Error: EdgeAdd(): vertexParent: " + vertexChild + " out of range: [0, " + vertices.count + "]");
             Debug.Assert(vertexChild >= 0 && vertexChild < vertices.count, "Error: EdgeAdd(): vertexChild: " + vertexChild + " out of range: [0, " + vertices.count + "]");
@@ -849,9 +994,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
 
-            payload.EdgePush(allocator);
+            Int16 res = payload.EdgePush(allocator);
 
             payload.EdgeComputePayloads(ref this, vertexParent, vertexChild);
+
+            return res;
         }
 
         public int EdgeContains(Int16 vertexParent, Int16 vertexChild)
@@ -1068,7 +1215,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                         if (vertexPrevious.IsValid() == 0) { --vChildNew; }
                     }
 
-                    EdgeAdd(vNew, vChildNew, allocator);
+                    Int16 edgeIndexNew = EdgeAdd(vNew, vChildNew, allocator);
+                    payload.EdgeCopy(ref src.payload, edgeIndex, ref payload, edgeIndexNew);
                 }
                 ++vNew;
             }
@@ -1137,7 +1285,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                         }
                     }
 
-                    res.EdgeAdd(vNew, vChildNew, allocator);
+                    Int16 edgeIndexNew = res.EdgeAdd(vNew, vChildNew, allocator);
+                    res.payload.EdgeCopy(ref payload, edgeIndex, ref res.payload, edgeIndexNew);
                 }
 
                 ++vNew;
@@ -1208,7 +1357,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                         }
                     }
 
-                    res.EdgeAdd(vChildNew, vNew, allocator);
+                    Int16 edgeIndexNew = res.EdgeAdd(vChildNew, vNew, allocator);
+                    res.payload.EdgeCopy(ref payload, edgeIndex, ref res.payload, edgeIndexNew);
                 }
 
                 ++vNew;
