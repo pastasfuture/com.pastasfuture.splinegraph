@@ -1161,7 +1161,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             int depthThreshold = 32
         )
         {
-            Debug.Assert(state.distance > 0.0f);
+            if (state.distance < errorThreshold)
+            {
+                // We have effectively reached our destination, finish iterating.
+                return false;
+            }
+
             Debug.Assert(state.vertexIndex != -1);
             Debug.Assert(state.edgeIndex != -1);
             Debug.Assert(state.t >= 0.0f && state.t <= 1.0f);
@@ -1181,9 +1186,11 @@ namespace Pastasfuture.SplineGraph.Runtime
                 Int16 vertexIndexNext = edgesParentToChild[state.edgeIndex].vertexIndex;
                 DirectedVertex vertexNext = vertices[vertexIndexNext];
                 Debug.Assert(vertexNext.IsValid() == 1);
-                if (vertexNext.childHead == -1)
+                if (vertexNext.childHead == -1 || distanceNext < errorThreshold)
                 {
-                    // We have reached a dead end.
+                    // We have reached a dead end,
+                    // or we have effectively reached our destination at the edge of the current spline.
+                    // Finish iterating.
                     state = new SplineGraphIteratorState
                     { 
                         distance = distanceNext,
