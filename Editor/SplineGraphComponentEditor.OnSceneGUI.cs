@@ -162,11 +162,14 @@ namespace Pastasfuture.SplineGraph.Editor
 
                 vertexPositionOS = sgc.transform.TransformPoint(vertexPositionOS);
 
-                // TODO: Make scale respect transform scale.
+                TryClearRotationToolGlobalRotationState();
 
+
+                // TODO: Make scale respect transform scale.
                 if (Tools.current == Tool.Move)
                 {
-                    if (TryOnSceneGUIMoveTool(out c.positionOffsetOS, sgc, vertexPositionOS, vertexRotationOS))
+                    quaternion handleRotation = (Tools.pivotRotation == PivotRotation.Global) ? quaternion.identity : vertexRotationOS;
+                    if (TryOnSceneGUIMoveTool(out c.positionOffsetOS, sgc, vertexPositionOS, handleRotation))
                     {
                         // Under multi-selection, positionOffsetOS will be the same for all points being transformed.
                         break;
@@ -175,7 +178,7 @@ namespace Pastasfuture.SplineGraph.Editor
 
                 else if (Tools.current == Tool.Rotate)
                 {
-                    if (TryOnSceneGUIRotationTool(out c.rotationOffsetOS, out c.rotationOffsetOriginOS, vertexPositionOS, vertexRotationOS))
+                    if (TryOnSceneGUIRotationTool(out c.rotationOffsetOS, out c.rotationOffsetOriginOS, vertexPositionOS, vertexRotationOS, isGlobalRotation: Tools.pivotRotation == PivotRotation.Global))
                     {
                         break;
                     }
@@ -282,16 +285,32 @@ namespace Pastasfuture.SplineGraph.Editor
             }
         }
 
-        private bool TryOnSceneGUIRotationTool(out quaternion rotationOffsetOS, out float3 rotationOffsetOriginOS, float3 vertexPositionOS, quaternion vertexRotationOS)
+        private quaternion rotationToolGlobalRotationPrevious = quaternion.identity;
+
+        private bool TryClearRotationToolGlobalRotationState()
+        {
+            bool cleared = false;
+            if ((Event.current.type == EventType.MouseUp) && (Event.current.button == 0))
+            {
+                cleared = true;
+                rotationToolGlobalRotationPrevious = quaternion.identity;
+            }
+            return cleared;
+        }
+
+        private bool TryOnSceneGUIRotationTool(out quaternion rotationOffsetOS, out float3 rotationOffsetOriginOS, float3 vertexPositionOS, quaternion vertexRotationOS, bool isGlobalRotation)
         {
             rotationOffsetOS = quaternion.identity;
             rotationOffsetOriginOS = float3.zero;
 
-            quaternion vertexRotationNewOS = Handles.RotationHandle(vertexRotationOS, vertexPositionOS);
-            if (math.any(vertexRotationNewOS.value != vertexRotationOS.value))
+            rotationToolGlobalRotationPrevious = isGlobalRotation ? rotationToolGlobalRotationPrevious : vertexRotationOS;
+
+            quaternion vertexRotationNewOS = Handles.RotationHandle(rotationToolGlobalRotationPrevious, vertexPositionOS);
+            if (math.any(vertexRotationNewOS.value != rotationToolGlobalRotationPrevious.value))
             {
                 // Compute the quaternion difference.
-                rotationOffsetOS = math.mul(vertexRotationNewOS, math.inverse(vertexRotationOS));
+                rotationOffsetOS = math.mul(vertexRotationNewOS, math.inverse(rotationToolGlobalRotationPrevious));
+                rotationToolGlobalRotationPrevious = vertexRotationNewOS;
 
                 // Cache off the position of the current vertex we are rotating.
                 // This will be used to rotate multi-selected vertices about this origin.
