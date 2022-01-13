@@ -28,6 +28,7 @@ namespace Pastasfuture.SplineGraph.Editor
         private DragRectState dragRectState = DragRectState.None;
         private float2 dragRectPositionBegin = float2.zero;
         private float2 dragRectPositionEnd = float2.zero;
+        private int dragRectHotControlPrevious = 0;
 
         private bool isExtruding = false;
 
@@ -115,6 +116,7 @@ namespace Pastasfuture.SplineGraph.Editor
                 if (TryOnSceneGUIVertexTransformTool(out OnSceneGUIVertexTransformToolContext context, sgc, rotation))
                 {
                     OnSceneGUIApplyVertexTransformTool(sgc, rotation, ref context);
+                    dragRectState = DragRectState.None;
                 }
             }
 

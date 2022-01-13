@@ -550,6 +550,7 @@ namespace Pastasfuture.SplineGraph.Editor
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0)
             {
                 Event.current.Use();
+                dragRectHotControlPrevious = GUIUtility.hotControl;
                 GUIUtility.hotControl = 0;
                 dragRectState = DragRectState.Dragging;
                 dragRectPositionBegin = Event.current.mousePosition;
@@ -577,8 +578,7 @@ namespace Pastasfuture.SplineGraph.Editor
             // Need to also handle the case where the mouse left the window, because in that case we will not get a MouseUp event.
             if ((Event.current.type == EventType.MouseUp && Event.current.button == 0) || Event.current.type == EventType.MouseLeaveWindow)
             {
-                Event.current.Use();
-                GUIUtility.hotControl = GUIUtility.GetControlID(FocusType.Passive);
+                GUIUtility.hotControl = dragRectHotControlPrevious;
                 dragRectState = DragRectState.None;
 
                 if (!Event.current.shift)
