@@ -729,6 +729,10 @@ namespace Pastasfuture.SplineGraph.Editor
                             }
                         }
 
+                        for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+                        {
+                            sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
+                        }
                     }
                     else if (GUILayout.Button("Cancel"))
                     {

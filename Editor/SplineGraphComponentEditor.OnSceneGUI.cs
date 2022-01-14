@@ -131,6 +131,9 @@ namespace Pastasfuture.SplineGraph.Editor
             public float tangentHandleSign;
             public float bitangentHandleOffsetScalar;
             public float bitangentHandleSign;
+            public float3 scaleToolOffsetOS;
+            public float3 scaleToolOriginOS;
+            public quaternion scaleToolRotationOS;
 
             public static readonly OnSceneGUIVertexTransformToolContext zero = new OnSceneGUIVertexTransformToolContext
             {
@@ -142,7 +145,10 @@ namespace Pastasfuture.SplineGraph.Editor
                 tangentHandleOffsetScalar = 0.0f,
                 tangentHandleSign = 0.0f,
                 bitangentHandleOffsetScalar = 0.0f,
-                bitangentHandleSign = 0.0f
+                bitangentHandleSign = 0.0f,
+                scaleToolOffsetOS = new float3(1.0f, 1.0f, 1.0f),
+                scaleToolOriginOS = float3.zero,
+                scaleToolRotationOS = quaternion.identity
             };
         }
 
@@ -163,6 +169,7 @@ namespace Pastasfuture.SplineGraph.Editor
                 vertexPositionOS = sgc.transform.TransformPoint(vertexPositionOS);
 
                 TryClearRotationToolGlobalRotationState();
+                TryClearScaleToolState();
 
 
                 // TODO: Make scale respect transform scale.
@@ -186,10 +193,22 @@ namespace Pastasfuture.SplineGraph.Editor
 
                 else if (Tools.current == Tool.Scale)
                 {
-                    if (TryOnSceneGUIScaleTool(out c.scaleOffsetOS, out c.leashOffsetOS, out c.tangentHandleOffsetScalar, out c.tangentHandleSign, out c.bitangentHandleOffsetScalar, out c.bitangentHandleSign, vertexPositionOS, vertexRotationOS, vertexScaleOS, vertexLeashOS))
+                    if (Event.current.shift)
                     {
-                        break;
+                        if (TryOnSceneGUITangentAndLeashTool(out c.scaleOffsetOS, out c.leashOffsetOS, out c.tangentHandleOffsetScalar, out c.tangentHandleSign, out c.bitangentHandleOffsetScalar, out c.bitangentHandleSign, vertexPositionOS, vertexRotationOS, vertexScaleOS, vertexLeashOS))
+                        {
+                            break;
+                        }
                     }
+                    else
+                    {
+                        quaternion handleRotation = (Tools.pivotRotation == PivotRotation.Global) ? quaternion.identity : vertexRotationOS;
+                        if (TryOnSceneGUIScaleTool(out c.scaleToolOffsetOS, out c.scaleToolOriginOS, out c.scaleToolRotationOS, vertexPositionOS, handleRotation))
+                        {
+                            break;
+                        }
+                    }
+                    
                 }
             }
 
@@ -208,7 +227,15 @@ namespace Pastasfuture.SplineGraph.Editor
             }
             else if (Tools.current == Tool.Scale)
             {
-                OnSceneGUIApplyScaleTool(sgc, rotation, c.tangentHandleOffsetScalar, c.tangentHandleSign, c.bitangentHandleOffsetScalar, c.bitangentHandleSign, c.scaleOffsetOS, c.leashOffsetOS);
+                if (Event.current.shift)
+                {
+                    OnSceneGUIApplyTangentAndLeashTool(sgc, rotation, c.tangentHandleOffsetScalar, c.tangentHandleSign, c.bitangentHandleOffsetScalar, c.bitangentHandleSign, c.scaleOffsetOS, c.leashOffsetOS);
+                }
+                else
+                {
+                    OnSceneGUIApplyScaleTool(sgc, rotation, c.scaleToolOffsetOS, c.scaleToolOriginOS, c.scaleToolRotationOS);
+                }
+                
             }
         }
 
@@ -310,6 +337,7 @@ namespace Pastasfuture.SplineGraph.Editor
             {
                 // Compute the quaternion difference.
                 rotationOffsetOS = math.mul(vertexRotationNewOS, math.inverse(rotationToolGlobalRotationPrevious));
+                rotationOffsetOS = math.normalize(rotationOffsetOS); // Normalization needed here for precision - ran into a few cases where slightly non-normalized rotations coming from here caused problems in other unity handles.
                 rotationToolGlobalRotationPrevious = vertexRotationNewOS;
 
                 // Cache off the position of the current vertex we are rotating.
@@ -334,6 +362,7 @@ namespace Pastasfuture.SplineGraph.Editor
 
                 quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
                 vertexRotationOS = math.mul(rotationOffsetOS, vertexRotationOS);
+                vertexRotationOS = math.normalize(vertexRotationOS); // Normalize for precision.
                 sgc.splineGraph.payload.rotations.data[selectedVertexIndex] = vertexRotationOS;
 
                 // In order to support the case where we have multi-selected vertices
@@ -356,7 +385,88 @@ namespace Pastasfuture.SplineGraph.Editor
             }
         }
 
-        private bool TryOnSceneGUIScaleTool(out float2 scaleOffsetOS, out float2 leashOffsetOS, out float tangentHandleOffsetScalar, out float tangentHandleSign, out float bitangentHandleOffsetScalar, out float bitangentHandleSign, float3 vertexPositionOS, quaternion vertexRotationOS, float2 vertexScaleOS, float2 vertexLeashOS)
+        private float3 scaleToolScalePrevious = new float3(0.0f, 0.0f, 0.0f);
+
+        private bool TryClearScaleToolState()
+        {
+            bool cleared = false;
+            if ((Event.current.type == EventType.MouseUp) && (Event.current.button == 0))
+            {
+                cleared = true;
+                scaleToolScalePrevious = new float3(1.0f, 1.0f, 1.0f);
+            }
+            return cleared;
+        }
+        private bool TryOnSceneGUIScaleTool(out float3 scaleOffsetOS, out float3 scaleOriginOS, out quaternion scaleRotationOS, float3 vertexPositionOS, quaternion vertexRotationOS)
+        {
+            scaleOffsetOS = new float3(1.0f, 1.0f, 1.0f);
+            scaleOriginOS = new float3(0.0f, 0.0f, 0.0f);
+            scaleRotationOS = quaternion.identity;
+
+            float handleSize = HandleUtility.GetHandleSize(vertexPositionOS) * 1.0f;
+            float3 scaleNewOS = Handles.ScaleHandle(scaleToolScalePrevious, vertexPositionOS, vertexRotationOS, handleSize);
+            if (math.any(scaleNewOS != scaleToolScalePrevious))
+            {
+                float3 normalization = new float3(
+                    (math.abs(scaleToolScalePrevious.x) > 1e-5f) ? (1.0f / scaleToolScalePrevious.x) : 1.0f,
+                    (math.abs(scaleToolScalePrevious.y) > 1e-5f) ? (1.0f / scaleToolScalePrevious.y) : 1.0f,
+                    (math.abs(scaleToolScalePrevious.z) > 1e-5f) ? (1.0f / scaleToolScalePrevious.z) : 1.0f
+                );
+                scaleOffsetOS = scaleNewOS * normalization;
+                scaleOriginOS = vertexPositionOS;
+                scaleRotationOS = vertexRotationOS;
+                scaleToolScalePrevious = scaleNewOS;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void OnSceneGUIApplyScaleTool(SplineGraphComponent sgc, quaternion rotation, float3 scaleOffsetOS, float3 scaleOriginOS, quaternion scaleRotationOS)
+        {
+            sgc.UndoRecord("Edited Spline Graph Vertex Scale");
+
+            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+            {
+                Int16 selectedVertexIndex = selectedIndices[i];
+
+                if (math.any(math.abs(scaleOffsetOS - new float3(1.0f, 1.0f, 1.0f)) > 1e-5f))
+                {
+                    quaternion vertexRotationOS = sgc.splineGraph.payload.rotations.data[selectedVertexIndex];
+
+                    float3 vertexPositionOS = sgc.splineGraph.payload.positions.data[selectedVertexIndex];
+
+                    float3 vertexOffsetOS = math.mul(math.inverse(scaleRotationOS), vertexPositionOS - scaleOriginOS);
+                    vertexOffsetOS *= scaleOffsetOS;
+                    vertexOffsetOS = math.mul(scaleRotationOS, vertexOffsetOS);
+                    vertexPositionOS = vertexOffsetOS + scaleOriginOS;
+                    sgc.splineGraph.payload.positions.data[selectedVertexIndex] = vertexPositionOS;
+
+                    // TODO: This actually requires you to hold down capslock, not just toggle it.
+                    // Unfortunately, there isnt a convinient way to just quickly check if capslock is down without manually handling the state.
+                    if (Event.current.capsLock)
+                    {
+                        float2 scalesOS = sgc.splineGraph.payload.scales.data[selectedVertexIndex];
+                        float scaleOSScale = math.length(math.mul(math.mul(math.inverse(scaleRotationOS), vertexRotationOS), new float3(0.0f, 0.0f, 1.0f)) * scaleOffsetOS) / 1.0f;
+                        scalesOS.x *= scaleOSScale;
+                        scalesOS.y *= scaleOSScale;
+                        sgc.splineGraph.payload.scales.data[selectedVertexIndex] = scalesOS;
+
+                        float2 leashOS = sgc.splineGraph.payload.leashes.data[selectedVertexIndex];
+                        leashOS.x *= math.length(math.mul(math.mul(math.inverse(scaleRotationOS), vertexRotationOS), new float3(1.0f, 0.0f, 0.0f)) * math.abs(scaleOffsetOS)) / 1.0f;
+                        leashOS.y *= math.length(math.mul(math.mul(math.inverse(scaleRotationOS), vertexRotationOS), new float3(0.0f, 1.0f, 0.0f)) * math.abs(scaleOffsetOS)) / 1.0f;
+                        sgc.splineGraph.payload.leashes.data[selectedVertexIndex] = leashOS;
+                    }
+                }
+            }
+
+            for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
+            {
+                sgc.splineGraph.VertexComputePayloads(selectedIndices[i]);
+            }
+        }
+
+        private bool TryOnSceneGUITangentAndLeashTool(out float2 scaleOffsetOS, out float2 leashOffsetOS, out float tangentHandleOffsetScalar, out float tangentHandleSign, out float bitangentHandleOffsetScalar, out float bitangentHandleSign, float3 vertexPositionOS, quaternion vertexRotationOS, float2 vertexScaleOS, float2 vertexLeashOS)
         {
             scaleOffsetOS = new float2(1.0f, 1.0f);
             leashOffsetOS = float2.zero;
@@ -450,9 +560,9 @@ namespace Pastasfuture.SplineGraph.Editor
             return isDone;
         }
 
-        private void OnSceneGUIApplyScaleTool(SplineGraphComponent sgc, quaternion rotation, float tangentHandleOffsetScalar, float tangentHandleSign, float bitangentHandleOffsetScalar, float bitangentHandleSign, float2 scaleOffsetOS, float2 leashOffsetOS)
+        private void OnSceneGUIApplyTangentAndLeashTool(SplineGraphComponent sgc, quaternion rotation, float tangentHandleOffsetScalar, float tangentHandleSign, float bitangentHandleOffsetScalar, float bitangentHandleSign, float2 scaleOffsetOS, float2 leashOffsetOS)
         {
-            sgc.UndoRecord("Edited Spline Graph Vertex Scale");
+            sgc.UndoRecord("Edited Spline Graph Vertex Tangent and Leash");
 
             for (Int16 i = 0, iCount = (Int16)selectedIndices.Count; i < iCount; ++i)
             {
