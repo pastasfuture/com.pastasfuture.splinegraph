@@ -77,6 +77,7 @@ namespace Pastasfuture.SplineGraph.Editor
             OnInspectorGUIDeselectAllTool(sgc);
             OnInspectorGUIRecenterTransformTool(sgc);
             OnInspectorGUISetValueTool(sgc);
+            OnInspectorGUIScaleTool(sgc);
             OnInspectorGUIExtrudeArcTool(sgc);
             OnInspectorGUIEditVertexTool(sgc);
 
