@@ -483,11 +483,6 @@ namespace Pastasfuture.SplineGraph.Runtime
             quaternion q = math.slerp(q0, q1, t);
             float3 splineBitangent = math.mul(q, new float3(0.0f, 1.0f, 0.0f));
 
-            // Because quaternions have double coverage, it is ambiguous which direction a > 180 degree rotation goes.
-            // Carefully preserve the sign by comparing to sign of bitangent out of q0 or q1 (dependant on which is closer).
-            float splineBitangentSign = (math.mul((t < 0.5) ? q0 : q1, new float3(0.0f, 1.0f, 0.0f)).y >= 0.0f) ? 1.0f : -1.0f;
-            splineBitangent.y = math.abs(splineBitangent.y) * splineBitangentSign;
-
             float3 splineTangent = math.normalize(math.cross(splineForward, splineBitangent));
             splineBitangent = math.cross(splineTangent, splineForward);
 
