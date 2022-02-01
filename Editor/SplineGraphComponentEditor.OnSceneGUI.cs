@@ -622,6 +622,10 @@ namespace Pastasfuture.SplineGraph.Editor
             else if (dragRectState == DragRectState.Dragging)
             {
                 OnSceneGUISelectVerticesDragToolDrag(sgc, rotation);
+
+                // Need to force the scene view to repaint so that our selection and drag rect updates.
+                // TODO: May want to force only the currently active scene view to repaint.
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
             }
         }
 

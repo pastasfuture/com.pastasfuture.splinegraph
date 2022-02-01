@@ -21,6 +21,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public SplineGraphUserBlobSchemaScriptableObject splineGraphUserBlobSchema = null;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+        public SplineGraphBinaryDataScriptableObject splineGraphBinaryData = null;
         public int gizmoSplineSegmentCount = 4;
 
         private bool isDeserializationNeeded = true;
@@ -49,7 +50,17 @@ namespace Pastasfuture.SplineGraph.Runtime
 
         void OnUndoRedoPerformed()
         {
-            ++lastDirtyTimestamp;
+            if (!isDirty)
+            {
+                ++lastDirtyTimestamp;
+
+                // When an undo or redo is performed, the serialized data becomes the source of truth, and needs to be deserialized.
+                // If we do not perform this, runtime data will get out of sync. Its especially noticable when SplineGraphBinaryData is used, as the changes in the binary data will not get reflected in the runtime.
+                // Note: We do not know if the undo or redo event was actually performed on ourselves. Keep an eye on this. It seems ok since we are just flagging the system to say the serialized data is the truth,
+                // which seems fine if the object isnt dirty.
+                isDeserializationNeeded = true;
+            }
+            
         }
 #endif
 
@@ -105,7 +116,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 isDeserializationNeeded = false;
 
-                splineGraph.Deserialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable, Allocator.Persistent);
+                if (splineGraphBinaryData != null)
+                {
+                    splineGraphSerializable = null;
+                    splineGraphPayloadSerializable = null;
+                    splineGraph.Deserialize(ref splineGraphBinaryData.splineGraphSerializable, ref splineGraphBinaryData.splineGraphPayloadSerializable, Allocator.Persistent);
+                }
+                else
+                {
+                    splineGraph.Deserialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable, Allocator.Persistent);
+                }
             }
 
             if (splineGraphUserBlobSchema != null)
@@ -129,10 +149,25 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 isDirty = false;
 
-                splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+                if (splineGraphBinaryData != null)
+                {
+                    splineGraphSerializable = null;
+                    splineGraphPayloadSerializable = null;
+
+                    splineGraph.Serialize(ref splineGraphBinaryData.splineGraphSerializable, ref splineGraphBinaryData.splineGraphPayloadSerializable);
+                }
+                else
+                {
+                    splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+                }
+                
 
 #if UNITY_EDITOR
                 EditorUtility.SetDirty(this);
+                if (splineGraphBinaryData != null)
+                {
+                    EditorUtility.SetDirty(splineGraphBinaryData);
+                }
 #endif
             }
         }
@@ -216,6 +251,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             isDirty = true;
         }
 
+        private UnityEngine.Object[] undoObjectsScratch = new UnityEngine.Object[2];
+
         public void UndoRecord(string message, bool isForceNewOperationEnabled = false)
         {
             Verify();
@@ -225,7 +262,17 @@ namespace Pastasfuture.SplineGraph.Runtime
                 Undo.IncrementCurrentGroup();
             }
 
-            Undo.RecordObject(this, message);
+            if (splineGraphBinaryData != null)
+            {
+                undoObjectsScratch[0] = this;
+                undoObjectsScratch[1] = splineGraphBinaryData;
+                Undo.RecordObjects(undoObjectsScratch, message);
+            }
+            else
+            {
+                Undo.RecordObject(this, message);
+            }
+            
             isDirty = true;
             ++lastDirtyTimestamp;  
         }
@@ -316,16 +363,16 @@ namespace Pastasfuture.SplineGraph.Runtime
                     Handles.matrix = splineGraphTransform.localToWorldMatrix;
                 }
 
-                // Place vertex index above vertex position.
-                {
-                    float3 vertexPosition = splineGraph.payload.positions.data[v];
-                    quaternion vertexRotation = splineGraph.payload.rotations.data[v];
-                    float handleSize = HandleUtility.GetHandleSize(vertexPosition);
-                    const float HANDLE_DISPLAY_SIZE = 0.125f;
-                    float vertexLabelSize = handleSize * HANDLE_DISPLAY_SIZE;
-                    float3 labelPosition = vertexPosition + math.mul(vertexRotation, new float3(0.0f, vertexLabelSize * 2.0f, 0.0f));
-                    // Handles.Label(labelPosition, "" + v);
-                }
+                //Place vertex index above vertex position.
+                //{
+                //    float3 vertexPosition = splineGraph.payload.positions.data[v];
+                //    quaternion vertexRotation = splineGraph.payload.rotations.data[v];
+                //    float handleSize = HandleUtility.GetHandleSize(vertexPosition);
+                //    const float HANDLE_DISPLAY_SIZE = 0.125f;
+                //    float vertexLabelSize = handleSize * HANDLE_DISPLAY_SIZE;
+                //    float3 labelPosition = vertexPosition + math.mul(vertexRotation, new float3(0.0f, vertexLabelSize * 2.0f, 0.0f));
+                //    // Handles.Label(labelPosition, "" + v);
+                //}
 
                 Handles.color = Color.white;
                 for (Int16 e = vertex.childHead; e != -1; e = splineGraph.edgePoolChildren.data[e].next)
@@ -347,17 +394,17 @@ namespace Pastasfuture.SplineGraph.Runtime
                         Handles.DrawLine(samplePosition0, samplePosition1);
                     }
 
-                    // Place arrow in center of spline segment.
+                    //Place arrow in center of spline segment.
                     {
                         float3 arrowPosition = SplineMath.EvaluatePositionFromT(spline, 0.5f);
                         quaternion arrowRotation = SplineMath.EvaluateRotationFromT(spline, 0.5f);
-                        
+
                         float handleSize = HandleUtility.GetHandleSize(arrowPosition);
                         const float HANDLE_DISPLAY_SIZE = 0.125f;
                         float arrowSize = handleSize * HANDLE_DISPLAY_SIZE;
                         Handles.ConeHandleCap(0, arrowPosition, arrowRotation, arrowSize, EventType.Repaint);
 
-                        float3 labelPosition = arrowPosition + math.mul(arrowRotation, new float3(0.0f, arrowSize * 2.0f, 0.0f));
+                        //float3 labelPosition = arrowPosition + math.mul(arrowRotation, new float3(0.0f, arrowSize * 2.0f, 0.0f));
                         // Handles.Label(labelPosition, "Length = " + splineLength);
 
                         // Display the spline's curvature at its halfway point along the spline.

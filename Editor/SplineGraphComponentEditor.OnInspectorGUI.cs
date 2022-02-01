@@ -14,6 +14,21 @@ namespace Pastasfuture.SplineGraph.Editor
         private int userBlobDebugDisplayMode = 0;
         private int[] userBlobDebugDisplayModeValues = null;
 
+        private struct EditVertexToolContext
+        {
+            public int pageIndex;
+            public int pageVertexCount;
+            public bool isFoldoutEnabled;
+
+            public static readonly EditVertexToolContext zero = new EditVertexToolContext()
+            {
+                pageIndex = 0,
+                pageVertexCount = 10,
+                isFoldoutEnabled = false
+            };
+        }
+        private EditVertexToolContext editVertexToolContext = EditVertexToolContext.zero;
+
         private bool TryOnInspectorGUIIsEditingEnabledTool(SplineGraphComponent sgc)
         {
             bool isEditingEnabledNew = EditorGUILayout.Toggle("Is Editing Enabled", sgc.isEditingEnabled);
@@ -44,6 +59,55 @@ namespace Pastasfuture.SplineGraph.Editor
                     schemaEdge.Dispose();
                 }
             }
+        }
+
+        private void OnInspectorGUISplineGraphBinaryDataTool(SplineGraphComponent sgc)
+        {
+            if (sgc.splineGraphBinaryData == null)
+            {
+                if (GUILayout.Button("Create Binary Data"))
+                {
+                    sgc.UndoRecord("Created Spline Graph Binary Data", true);
+                    SplineGraphBinaryDataScriptableObject binaryData = ScriptableObject.CreateInstance<SplineGraphBinaryDataScriptableObject>();
+                    
+                    sgc.splineGraphBinaryData = binaryData;
+                    sgc.splineGraphBinaryData.splineGraphSerializable = sgc.splineGraphSerializable;
+                    sgc.splineGraphBinaryData.splineGraphPayloadSerializable = sgc.splineGraphPayloadSerializable;
+                    sgc.splineGraphSerializable = null;
+                    sgc.splineGraphPayloadSerializable = null;
+
+                    AssetDatabase.CreateAsset(binaryData, string.Format("Assets/{0}_{1}_SplineGraphBinaryData.asset", sgc.gameObject.scene.name, sgc.gameObject.name));
+                    AssetDatabase.SaveAssets();
+                }
+            }
+            else
+            {
+                var binaryDataNext = EditorGUILayout.ObjectField("Spline Graph Binary Data", sgc.splineGraphBinaryData, typeof(SplineGraphBinaryDataScriptableObject), false) as SplineGraphBinaryDataScriptableObject;
+                if (binaryDataNext != sgc.splineGraphBinaryData)
+                {
+                    sgc.UndoRecord("Edited Spline Graph Binary Data", true);
+
+                    if (sgc.splineGraphBinaryData == null && binaryDataNext != null)
+                    {
+                        // Asset was assigned where previously no asset was assigned. Overwrite any existing data with the binary data.
+                        sgc.splineGraphSerializable = null;
+                        sgc.splineGraphPayloadSerializable = null;
+                        sgc.splineGraphBinaryData = binaryDataNext;
+                    }
+                    else if (sgc.splineGraphBinaryData != null && binaryDataNext == null)
+                    {
+                        // Asset was unassigned, clear out the serialized data.
+                        sgc.splineGraphSerializable = new DirectedGraphSerializable();
+                        sgc.splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();   
+                    }
+                    else
+                    {
+                        // Simple assign the new serialized data asset.
+                        sgc.splineGraphBinaryData = binaryDataNext;
+                    }
+                }
+            }
+            
         }
 
         private void OnInspectorGUITypeTool(SplineGraphComponent sgc)
@@ -446,30 +510,59 @@ namespace Pastasfuture.SplineGraph.Editor
             }
         }
 
+        private static readonly GUIContent pageIndexGUIContent = new GUIContent("Page");
+        private bool TryOnInspectorGUIEditVertexToolPageSettings(SplineGraphComponent sgc)
+        {
+            if (!editVertexToolContext.isFoldoutEnabled && GUILayout.Button("Vertex Data"))
+            {
+                editVertexToolContext.isFoldoutEnabled = true;
+            }
+            if (editVertexToolContext.isFoldoutEnabled)
+            {
+                editVertexToolContext.pageVertexCount = Math.Max(1, EditorGUILayout.IntField("Page Vertex Count", editVertexToolContext.pageVertexCount));
+                editVertexToolContext.pageIndex = EditorGUILayout.IntSlider(pageIndexGUIContent, editVertexToolContext.pageIndex, 0, Mathf.CeilToInt((float)sgc.GetSplineGraph().ComputeVertexIsValidCount() / editVertexToolContext.pageVertexCount));
+            }
+
+            return editVertexToolContext.isFoldoutEnabled;
+        }
+
         private void OnInspectorGUIEditVertexTool(SplineGraphComponent sgc)
         {
+            if (!TryOnInspectorGUIEditVertexToolPageSettings(sgc)) { return; }
+
             Int16 indexAdd = -1;
             Int16 indexRemove = -1;
             Color styleTextColorPrevious = EditorStyles.label.normal.textColor;
-            for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
-            {
-                DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
-                if (vertex.IsValid() == 0) { continue; }
 
-                if (selectionType == SelectionType.Vertex)
+            Int16 pageVertexIndexStart = (Int16)(editVertexToolContext.pageIndex * editVertexToolContext.pageVertexCount);
+            Int16 pageVertexIndexEnd = (Int16)(editVertexToolContext.pageIndex * editVertexToolContext.pageVertexCount + editVertexToolContext.pageVertexCount - 1);
+            Int16 selectedIndicesCount = (Int16)selectedIndices.Count;
+            pageVertexIndexEnd = Math.Min(pageVertexIndexEnd, (Int16)(sgc.splineGraph.ComputeVertexIsValidCount() - 1));
+
+            int vertexSkipInvalidCount = 0;
+            for (Int16 pageVertexIndex = pageVertexIndexStart; pageVertexIndex <= pageVertexIndexEnd; ++pageVertexIndex)
+            {
+                // This loop is typically expected to only run once or twice.
+                Int16 v = -1;
+                bool vertexIsSelected = false;
+                for (; vertexSkipInvalidCount < sgc.splineGraph.vertices.count; ++vertexSkipInvalidCount)
                 {
-                    for (int i = 0, iLen = selectedIndices.Count; i < iLen; ++i)
+                    v = (pageVertexIndex < selectedIndicesCount) ? selectedIndices[pageVertexIndex + vertexSkipInvalidCount] : (Int16)(pageVertexIndex - selectedIndicesCount + vertexSkipInvalidCount);
+                    vertexIsSelected = (pageVertexIndex + vertexSkipInvalidCount) < selectedIndices.Count;
+                    if (sgc.splineGraph.vertices.data[v].IsValid() == 1)
                     {
-                        Int16 selectedIndex = selectedIndices[i];
-                        if (selectedIndex == v)
+                        if ((pageVertexIndex < selectedIndicesCount) || !selectedIndices.Contains(v))
                         {
-                            // Current vertex is selected. Change style in GUI.
-                            EditorStyles.label.normal.textColor = Color.green;
                             break;
                         }
-
                     }
-                }
+                }                
+
+                DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
+                Debug.Assert(vertex.IsValid() == 1);
+
+                // Current vertex is selected. Change style in GUI.
+                EditorStyles.label.normal.textColor = vertexIsSelected ? Color.green : styleTextColorPrevious;
 
                 EditorGUILayout.BeginHorizontal();
 
@@ -756,6 +849,11 @@ namespace Pastasfuture.SplineGraph.Editor
                     // And now remove the vertex.
                     sgc.VertexRemove(indexRemove);
                 }
+            }
+
+            if (GUILayout.Button("Close"))
+            {
+                editVertexToolContext.isFoldoutEnabled = false;
             }
         }
     }

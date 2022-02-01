@@ -61,30 +61,40 @@ namespace Pastasfuture.SplineGraph.Editor
                 return;
             }
 
-            OnInspectorGUIUserBlobSchemaTool(sgc);
-            OnInspectorGUITypeTool(sgc);
-            OnInspectorGUIGizmoSplineSegmentCountTool(sgc);
-            OnInspectorGUIUserBlobDebugDisplayTool(sgc);
-            OnInspectorGUIAddVertexTool(sgc);
-            OnInspectorGUIConnectSelectedTool(sgc);
-            OnInspectorGUIMergeSelectedVerticesTool(sgc);
-            OnInspectorGUISplitEdgeBetweenSelectedVerticesTool(sgc);
-            OnInspectorGUIBuildCompactGraphTool(sgc);
-            OnInspectorGUICopyGraphTool(sgc);
-            OnInspectorGUIPasteGraphTool(sgc);
-            OnInspectorGUIReverseTool(sgc);
-            OnInspectorGUISelectAllTool(sgc);
-            OnInspectorGUIDeselectAllTool(sgc);
-            OnInspectorGUIRecenterTransformTool(sgc);
-            OnInspectorGUISetValueTool(sgc);
-            OnInspectorGUIScaleTool(sgc);
-            OnInspectorGUIExtrudeArcTool(sgc);
-            OnInspectorGUIEditVertexTool(sgc);
+            EditorGUI.BeginChangeCheck();
+            {
+                OnInspectorGUIUserBlobSchemaTool(sgc);
+                OnInspectorGUISplineGraphBinaryDataTool(sgc);
+                OnInspectorGUITypeTool(sgc);
+                OnInspectorGUIGizmoSplineSegmentCountTool(sgc);
+                OnInspectorGUIUserBlobDebugDisplayTool(sgc);
+                OnInspectorGUIAddVertexTool(sgc);
+                OnInspectorGUIConnectSelectedTool(sgc);
+                OnInspectorGUIMergeSelectedVerticesTool(sgc);
+                OnInspectorGUISplitEdgeBetweenSelectedVerticesTool(sgc);
+                OnInspectorGUIBuildCompactGraphTool(sgc);
+                OnInspectorGUICopyGraphTool(sgc);
+                OnInspectorGUIPasteGraphTool(sgc);
+                OnInspectorGUIReverseTool(sgc);
+                OnInspectorGUISelectAllTool(sgc);
+                OnInspectorGUIDeselectAllTool(sgc);
+                OnInspectorGUIRecenterTransformTool(sgc);
+                OnInspectorGUISetValueTool(sgc);
+                OnInspectorGUIScaleTool(sgc);
+                OnInspectorGUIExtrudeArcTool(sgc);
+                OnInspectorGUIEditVertexTool(sgc);
+            }
+            bool inspectorChanged = EditorGUI.EndChangeCheck();
 
             EditorGUILayout.EndVertical();
+
             sgc.Verify();
             serializedObject.ApplyModifiedProperties();
-            UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+
+            if (inspectorChanged)
+            {
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+            }
         }
 
         private void OnSceneGUI()
