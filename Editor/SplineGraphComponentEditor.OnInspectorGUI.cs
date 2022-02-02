@@ -76,7 +76,7 @@ namespace Pastasfuture.SplineGraph.Editor
                     sgc.splineGraphSerializable = null;
                     sgc.splineGraphPayloadSerializable = null;
 
-                    AssetDatabase.CreateAsset(binaryData, string.Format("Assets/{0}_{1}_SplineGraphBinaryData.asset", sgc.gameObject.scene.name, sgc.gameObject.name));
+                    AssetDatabase.CreateAsset(binaryData, string.Format("Assets/{0}_{1}_SplineGraphComponent_SplineGraphBinaryData.asset", sgc.gameObject.scene.name, sgc.gameObject.name));
                     AssetDatabase.SaveAssets();
                 }
             }
@@ -98,7 +98,8 @@ namespace Pastasfuture.SplineGraph.Editor
                     {
                         // Asset was unassigned, clear out the serialized data.
                         sgc.splineGraphSerializable = new DirectedGraphSerializable();
-                        sgc.splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();   
+                        sgc.splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+                        sgc.splineGraphBinaryData = null;
                     }
                     else
                     {
@@ -107,7 +108,6 @@ namespace Pastasfuture.SplineGraph.Editor
                     }
                 }
             }
-            
         }
 
         private void OnInspectorGUITypeTool(SplineGraphComponent sgc)

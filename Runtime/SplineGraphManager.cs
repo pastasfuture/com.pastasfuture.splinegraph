@@ -20,6 +20,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public SplineGraphUserBlobSchemaScriptableObject splineGraphUserBlobSchema = null;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
         public SplineGraphPayloadSerializable splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+        public SplineGraphBinaryDataScriptableObject splineGraphBinaryData = null;
         public int gizmoSplineSegmentCount = 4;
 
         private bool isDeserializationNeeded = true;
@@ -76,8 +77,16 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 isDeserializationNeeded = false;
 
-                splineGraph.Deserialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable, Allocator.Persistent);
-                // Debug.Log(splineGraph.payload.positions.count);
+                if (splineGraphBinaryData != null)
+                {
+                    splineGraphSerializable = null;
+                    splineGraphPayloadSerializable = null;
+                    splineGraph.Deserialize(ref splineGraphBinaryData.splineGraphSerializable, ref splineGraphBinaryData.splineGraphPayloadSerializable, Allocator.Persistent);
+                }
+                else
+                {
+                    splineGraph.Deserialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable, Allocator.Persistent);
+                }
             }
 
             if (splineGraphUserBlobSchema != null)
@@ -101,10 +110,25 @@ namespace Pastasfuture.SplineGraph.Runtime
             {
                 isDirty = false;
 
-                splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+                if (splineGraphBinaryData != null)
+                {
+                    splineGraphSerializable = null;
+                    splineGraphPayloadSerializable = null;
+
+                    splineGraph.Serialize(ref splineGraphBinaryData.splineGraphSerializable, ref splineGraphBinaryData.splineGraphPayloadSerializable);
+                }
+                else
+                {
+                    splineGraph.Serialize(ref splineGraphSerializable, ref splineGraphPayloadSerializable);
+                }
+
 
 #if UNITY_EDITOR
                 EditorUtility.SetDirty(this);
+                if (splineGraphBinaryData != null)
+                {
+                    EditorUtility.SetDirty(splineGraphBinaryData);
+                }
 #endif
             }
         }
@@ -130,9 +154,20 @@ namespace Pastasfuture.SplineGraph.Runtime
         }
 
 #if UNITY_EDITOR
+        private static UnityEngine.Object[] undoObjectsScratch = new UnityEngine.Object[2];
         public void UndoRecord(string message)
         {
-            Undo.RecordObject(this, message);
+            if (splineGraphBinaryData != null)
+            {
+                undoObjectsScratch[0] = this;
+                undoObjectsScratch[1] = splineGraphBinaryData;
+                Undo.RecordObjects(undoObjectsScratch, message);
+            }
+            else
+            {
+                Undo.RecordObject(this, message);
+            }
+            
             this.isDirty = true;
             ++this.lastDirtyTimestamp;
         }
@@ -595,6 +630,8 @@ namespace Pastasfuture.SplineGraph.Runtime
                 schemaEdge.Dispose();
             }
 
+            OnInspectorGUISplineGraphBinaryDataTool(sgm);
+
             bool isRenderingEnabledNew = EditorGUILayout.Toggle("Is Rendering Enabled", sgm.isRenderingEnabled);
             if (isRenderingEnabledNew != sgm.isRenderingEnabled)
             {
@@ -711,6 +748,55 @@ namespace Pastasfuture.SplineGraph.Runtime
             if (sgm.isAutoUpdateEnabled)
             {
                 sgm.BuildGraphFromInstances();
+            }
+        }
+
+        private void OnInspectorGUISplineGraphBinaryDataTool(SplineGraphManager sgm)
+        {
+            if (sgm.splineGraphBinaryData == null)
+            {
+                if (GUILayout.Button("Create Binary Data"))
+                {
+                    sgm.UndoRecord("Created Spline Graph Binary Data");
+                    SplineGraphBinaryDataScriptableObject binaryData = ScriptableObject.CreateInstance<SplineGraphBinaryDataScriptableObject>();
+
+                    sgm.splineGraphBinaryData = binaryData;
+                    sgm.splineGraphBinaryData.splineGraphSerializable = sgm.splineGraphSerializable;
+                    sgm.splineGraphBinaryData.splineGraphPayloadSerializable = sgm.splineGraphPayloadSerializable;
+                    sgm.splineGraphSerializable = null;
+                    sgm.splineGraphPayloadSerializable = null;
+
+                    AssetDatabase.CreateAsset(binaryData, string.Format("Assets/{0}_{1}_SplineGraphManager_SplineGraphBinaryData.asset", sgm.gameObject.scene.name, sgm.gameObject.name));
+                    AssetDatabase.SaveAssets();
+                }
+            }
+            else
+            {
+                var binaryDataNext = EditorGUILayout.ObjectField("Spline Graph Binary Data", sgm.splineGraphBinaryData, typeof(SplineGraphBinaryDataScriptableObject), false) as SplineGraphBinaryDataScriptableObject;
+                if (binaryDataNext != sgm.splineGraphBinaryData)
+                {
+                    sgm.UndoRecord("Edited Spline Graph Binary Data");
+
+                    if (sgm.splineGraphBinaryData == null && binaryDataNext != null)
+                    {
+                        // Asset was assigned where previously no asset was assigned. Overwrite any existing data with the binary data.
+                        sgm.splineGraphSerializable = null;
+                        sgm.splineGraphPayloadSerializable = null;
+                        sgm.splineGraphBinaryData = binaryDataNext;
+                    }
+                    else if (sgm.splineGraphBinaryData != null && binaryDataNext == null)
+                    {
+                        // Asset was unassigned, clear out the serialized data.
+                        sgm.splineGraphSerializable = new DirectedGraphSerializable();
+                        sgm.splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+                        sgm.splineGraphBinaryData = null;
+                    }
+                    else
+                    {
+                        // Simple assign the new serialized data asset.
+                        sgm.splineGraphBinaryData = binaryDataNext;
+                    }
+                }
             }
         }
     }
