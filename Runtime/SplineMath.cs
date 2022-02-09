@@ -465,7 +465,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static quaternion EvaluateRotationFromT(Spline spline, float t)
         {
             float3 splineVelocity = SplineMath.EvaluateVelocityFromT(spline, t);
-            float3 splineForward = math.normalize(splineVelocity);
+            float3 splineForward = math.normalizesafe(splineVelocity, new float3(0.0f, 0.0f, 1.0f));
             float3 splineUp = math.abs(splineForward.y) < 0.999f ? new float3(0.0f, 1.0f, 0.0f) : new float3(1.0f, 0.0f, 0.0f);
             float3 splineTangent = math.normalize(math.cross(splineForward, splineUp));
             float3 splineBitangent = math.cross(splineTangent, splineForward);
@@ -478,7 +478,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         public static quaternion EvaluateRotationWithRollFromT(Spline spline, quaternion q0, quaternion q1, float t)
         {
             float3 splineVelocity = SplineMath.EvaluateVelocityFromT(spline, t);
-            float3 splineForward = math.normalize(splineVelocity);
+            float3 splineForward = math.normalizesafe(splineVelocity, new float3(0.0f, 0.0f, 1.0f));
 
             quaternion q = math.slerp(q0, q1, t);
             float3 splineBitangent = math.mul(q, new float3(0.0f, 1.0f, 0.0f));
@@ -1333,7 +1333,7 @@ namespace Pastasfuture.SplineGraph.Runtime
             SplineMath.Spline splineLeash = splineLeashes[edgeIndex];
 
             float3 positionOnSpline = SplineMath.EvaluatePositionFromT(spline, t);
-            quaternion rotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, t);         
+            quaternion rotationOnSpline = SplineMath.EvaluateRotationWithRollFromT(spline, rotationParent, rotationChild, t);
             float2 leashMaxOS = SplineMath.EvaluatePositionFromT(splineLeash, t).xy;
 
             position = positionOnSpline;

@@ -1222,6 +1222,40 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
         }
 
+        public bool TryPruneDeadEndVertices()
+        {
+            int pruneAttemptCountMax = vertices.count;
+            int pruneAttemptCount = 0;
+            bool vertexRemoved;
+            bool pruningOccurred = false;
+
+            // Simply perform full scans every time a vertex is removed until we have satisfied our contraint.
+            // Brute force, but simple to verify + write, and for the common case, this shouldnt run much.
+            // If we need to optimize this in the future, we could create a recursive function that walks
+            // all the child or parent vertices in a linear run of a removed vertex and remove those as well.
+            do
+            {
+                vertexRemoved = false;
+                for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = vertices.data[v];
+                    if (vertex.IsValid() == 0) { continue; }
+
+                    if (vertex.parentHead == -1 || vertex.childHead == -1)
+                    {
+                        // Orphan (dead end in one or both directions)
+                        VertexRemove(v);
+                        vertexRemoved = true;
+                        pruningOccurred = true;
+                    }
+                }
+                ++pruneAttemptCount;
+            }
+            while (vertexRemoved && pruneAttemptCount < pruneAttemptCountMax);
+
+            return pruningOccurred;
+        }
+
         public void BuildCompactDirectedGraph(ref DirectedGraph<PayloadT, PayloadSerializableT> res, Allocator allocator)
         {
             res.Clear();
@@ -1244,7 +1278,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
-                if (vertex.IsValid() == 0)
+                if ((vertex.IsValid() == 0)
+                    || ((vertex.childHead == -1) && (vertex.parentHead == -1))) // also ignore orphaned vertices.
                 {
                     // Do not increment vNew. Just continue.
                     continue;
@@ -1257,7 +1292,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (Int16 v = 0, vCount = (Int16)vertices.count, vNew = 0; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
-                if (vertex.IsValid() == 0)
+                if ((vertex.IsValid() == 0)
+                    || ((vertex.childHead == -1) && (vertex.parentHead == -1))) // also ignore orphaned vertices.
                 {
                     // Do not increment vNew. Just continue.
                     continue;
@@ -1316,7 +1352,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (Int16 v = 0, vCount = (Int16)vertices.count; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
-                if (vertex.IsValid() == 0)
+                if ((vertex.IsValid() == 0)
+                    || ((vertex.childHead == -1) && (vertex.parentHead == -1))) // also ignore orphaned vertices.
                 {
                     // Do not increment vNew. Just continue.
                     continue;
@@ -1329,7 +1366,8 @@ namespace Pastasfuture.SplineGraph.Runtime
             for (Int16 v = 0, vCount = (Int16)vertices.count, vNew = 0; v < vCount; ++v)
             {
                 DirectedVertex vertex = vertices.data[v];
-                if (vertex.IsValid() == 0)
+                if ((vertex.IsValid() == 0)
+                    || ((vertex.childHead == -1) && (vertex.parentHead == -1))) // also ignore orphaned vertices.
                 {
                     // Do not increment vNew. Just continue.
                     continue;

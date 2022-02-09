@@ -277,6 +277,32 @@ namespace Pastasfuture.SplineGraph.Runtime
             ++lastDirtyTimestamp;  
         }
 
+        public bool TryPruneDeadEndVertices()
+        {
+            UndoRecord("Spline Graph Prune Dead End Vertices");
+
+            return splineGraph.TryPruneDeadEndVertices();
+        }
+
+        public bool TrySanitizeRotationQuaternions()
+        {
+            UndoRecord("Spline Graph Sanitize Rotation Quaternions");
+            bool normalizationOccurred = false;
+            for (Int16 v = 0, vCount = (Int16)splineGraph.vertices.count; v < vCount; ++v)
+            {
+                DirectedVertex vertex = splineGraph.vertices.data[v];
+                if (vertex.IsValid() == 0) { continue; }
+
+                if (math.abs(1.0f - math.length(splineGraph.payload.rotations.data[v])) > 1e-5f)
+                {
+                    splineGraph.payload.rotations.data[v] = math.normalize(splineGraph.payload.rotations.data[v]);
+                    normalizationOccurred = true;
+                }
+            }
+
+            return normalizationOccurred;
+        }
+
         public void BuildCompactGraph()
         {
             Verify();
