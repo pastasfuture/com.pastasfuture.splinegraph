@@ -75,6 +75,7 @@ namespace Pastasfuture.SplineGraph.Editor
                 OnInspectorGUIBuildCompactGraphTool(sgc);
                 OnInspectorGUICopyGraphTool(sgc);
                 OnInspectorGUIPasteGraphTool(sgc);
+                OnInspectorGUIPasteInsertGraphTool(sgc);
                 OnInspectorGUIReverseTool(sgc);
                 OnInspectorGUISelectAllTool(sgc);
                 OnInspectorGUIDeselectAllTool(sgc);

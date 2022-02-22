@@ -380,6 +380,9 @@ namespace Pastasfuture.SplineGraph.Editor
                 sgc.UndoRecord("Spline Graph Paste Graph", true);
 
                 SplineGraphComponentEditor.copyScratchWS.Copy(ref SplineGraphComponentEditor.copyScratchWS, ref sgc.splineGraph, Allocator.Persistent);
+
+                // Convert the graph payload from world space to object space.
+                // TODO: Add (lossy) support for respecting scale transformations on payload.scales and payload.leashes
                 for (Int16 v = 0, vCount = (Int16)sgc.splineGraph.vertices.count; v < vCount; ++v)
                 {
                     DirectedVertex vertex = sgc.splineGraph.vertices.data[v];
@@ -420,12 +423,86 @@ namespace Pastasfuture.SplineGraph.Editor
                 }
 
 
-                // Convert the graph payload from world space to object space.
-                // TODO: Add (lossy) support for respecting scale transformations on payload.scales and payload.leashes
+                
 
                 // Vertex and Edge indices change when graph is pasted.
                 // Selection will no longer be valid.
                 selectedIndices.Clear();
+                Repaint(); // Repaint editor to display selection changes in InspectorGUI.
+            }
+        }
+
+        private void OnInspectorGUIPasteInsertGraphTool(SplineGraphComponent sgc)
+        {
+            if (GUILayout.Button("Paste Insert Graph"))
+            {
+                sgc.UndoRecord("Spline Graph Paste Insert Graph", true);
+
+                selectedIndices.Clear();
+
+                // First build a compact graph so that it is easier to reason about.
+                // All new vertices will now take place at a specific offset - the end of the original vertices.
+                // If we did not build a compact graph, there would be holes that would be filled randomly.
+                sgc.BuildCompactGraph();
+                if (SplineGraphComponentEditor.copyScratchWS.verticesFreeHoleCount > 0
+                    || SplineGraphComponentEditor.copyScratchWS.edgePoolChildrenFreeHoleCount > 0
+                    || SplineGraphComponentEditor.copyScratchWS.edgePoolParentsFreeHoleCount > 0)
+                {
+                    var splineGraphCompact = new DirectedGraph<SplineGraphPayload, SplineGraphPayloadSerializable>(Allocator.Persistent);
+                    if (SplineGraphComponentEditor.copyScratchWS.payload.userBlobSchemaVersion != 0)
+                    {
+                        splineGraphCompact.payload.SetSchema(ref SplineGraphComponentEditor.copyScratchWS.payload.userBlobVertex.schema, ref SplineGraphComponentEditor.copyScratchWS.payload.userBlobEdge.schema, SplineGraphComponentEditor.copyScratchWS.payload.userBlobSchemaVersion, Allocator.Persistent);
+                    }
+                    SplineGraphComponentEditor.copyScratchWS.BuildCompactDirectedGraph(ref splineGraphCompact, Allocator.Persistent);
+                    SplineGraphComponentEditor.copyScratchWS.Dispose();
+                    SplineGraphComponentEditor.copyScratchWS = splineGraphCompact;
+                }
+
+                Int16 vertexIndexInsertBase = (Int16)sgc.splineGraph.vertices.count;
+                Int16 edgeIndexInsertBase = (Int16)sgc.splineGraph.edgePoolChildren.count;
+
+                // For performance, lets preallocate capacity for all the new vertices, rather than pushing them one at a time.
+                sgc.splineGraph.VertexEnsure((Int16)(vertexIndexInsertBase + SplineGraphComponentEditor.copyScratchWS.vertices.count), Allocator.Persistent);
+                sgc.splineGraph.EdgeEnsure((Int16)(edgeIndexInsertBase + SplineGraphComponentEditor.copyScratchWS.edgePoolChildren.count), Allocator.Persistent);
+
+                for (Int16 v = 0, vCount = (Int16)SplineGraphComponentEditor.copyScratchWS.vertices.count; v < vCount; ++v)
+                {
+                    DirectedVertex vertex = SplineGraphComponentEditor.copyScratchWS.vertices.data[v];
+                    Debug.Assert(vertex.IsValid() == 1);
+
+                    Int16 vertexIndexNew = sgc.splineGraph.VertexAdd(Allocator.Persistent);
+                    Debug.Assert(vertexIndexNew == (vertexIndexInsertBase + v));
+
+                    sgc.splineGraph.payload.VertexCopy(ref SplineGraphComponentEditor.copyScratchWS.payload, v, ref sgc.splineGraph.payload, vertexIndexNew);
+
+                    // Convert the graph payload from world space to object space.
+                    sgc.splineGraph.payload.positions.data[vertexIndexNew] = sgc.transform.InverseTransformPoint(sgc.splineGraph.payload.positions.data[vertexIndexNew]);
+                    sgc.splineGraph.payload.rotations.data[vertexIndexNew] = math.mul(math.inverse(sgc.transform.rotation), sgc.splineGraph.payload.rotations.data[vertexIndexNew]);
+
+                    sgc.splineGraph.payload.VertexComputePayloads(ref sgc.splineGraph, v);
+
+                    selectedIndices.Add(vertexIndexNew);
+                }
+
+                for (Int16 e = 0, eCount = (Int16)SplineGraphComponentEditor.copyScratchWS.edgePoolChildren.count; e < eCount; ++e)
+                {
+                    DirectedEdge edge = SplineGraphComponentEditor.copyScratchWS.edgePoolChildren.data[e];
+                    Debug.Assert(edge.IsValid() == 1);
+
+                    Int16 vertexIndexChild = edge.vertexIndex;
+                    Int16 vertexIndexParent = SplineGraphComponentEditor.copyScratchWS.edgePoolParents.data[e].vertexIndex;
+
+                    Int16 vertexIndexChildNew = (Int16)(vertexIndexChild + vertexIndexInsertBase);
+                    Int16 vertexIndexParentNew = (Int16)(vertexIndexParent + vertexIndexInsertBase);
+
+                    if (sgc.splineGraph.EdgeContains(vertexIndexParentNew, vertexIndexChildNew) == 0)
+                    {
+                        Int16 edgeIndexNew = sgc.splineGraph.EdgeAdd(vertexIndexParentNew, vertexIndexChildNew, Allocator.Persistent);
+
+                        sgc.splineGraph.payload.EdgeComputePayloads(ref sgc.splineGraph, vertexIndexParentNew, vertexIndexChildNew);
+                    }
+                }
+
                 Repaint(); // Repaint editor to display selection changes in InspectorGUI.
             }
         }

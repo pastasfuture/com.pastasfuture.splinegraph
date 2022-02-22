@@ -732,6 +732,19 @@ namespace Pastasfuture.SplineGraph.Runtime
             return (Int16)(edgePoolParents.count - edgePoolParentsFreeHoleCount);
         }
 
+        public void VertexEnsure(Int16 capacityRequested, Allocator allocator)
+        {
+            vertices.Ensure(capacityRequested, allocator);
+            payload.VertexEnsure(capacityRequested, allocator);
+        }
+
+        public void EdgeEnsure(Int16 capacityRequested, Allocator allocator)
+        {
+            edgePoolChildren.Ensure(capacityRequested, allocator);
+            edgePoolParents.Ensure(capacityRequested, allocator);
+            payload.EdgeEnsure(capacityRequested, allocator);
+        }
+
         public Int16 VertexAdd(Allocator allocator)
         {
             Int16 res = (Int16)vertices.count;
