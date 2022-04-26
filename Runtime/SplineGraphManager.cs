@@ -16,6 +16,7 @@ namespace Pastasfuture.SplineGraph.Runtime
         [System.NonSerialized] public bool isEditingEnabled = false;
         [System.NonSerialized] public bool isRenderingEnabled = false;
         [System.NonSerialized] public bool isAutoUpdateEnabled = false;
+        public bool isReadOnly = false;
         public int type = 0;
         public SplineGraphUserBlobSchemaScriptableObject splineGraphUserBlobSchema = null;
         public DirectedGraphSerializable splineGraphSerializable = new DirectedGraphSerializable();
@@ -40,6 +41,24 @@ namespace Pastasfuture.SplineGraph.Runtime
         {
             Verify();
             return splineGraph;
+        }
+
+        public void SetSplineGraphBinaryDataScriptableObjectAsSource(SplineGraphUserBlobSchemaScriptableObject userBlobSchema, SplineGraphBinaryDataScriptableObject binaryData)
+        {
+            splineGraphUserBlobSchema = userBlobSchema;
+            splineGraphBinaryData = binaryData;
+            splineGraphSerializable = null;
+
+            isReadOnly = (binaryData != null) ? true : isReadOnly;
+            isDirty = false;
+            isDeserializationNeeded = (binaryData != null);
+
+            if (binaryData == null)
+            {
+                splineGraph.Clear();
+            }
+
+            Verify();
         }
 
         void OnEnable()
@@ -106,7 +125,7 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
 
-            if (isDirty)
+            if (isDirty && !isReadOnly)
             {
                 isDirty = false;
 
@@ -615,6 +634,13 @@ namespace Pastasfuture.SplineGraph.Runtime
                 return;
             }
 
+            bool isReadOnlyNew = EditorGUILayout.Toggle("Read-Only", sgm.isReadOnly);
+            if (isReadOnlyNew != sgm.isReadOnly)
+            {
+                sgm.UndoRecord("Toggled Spline Graph Manager isReadOnly");
+                sgm.isReadOnly = isReadOnlyNew;
+            }
+
             var splineGraphUserBlobSchemaNext = EditorGUILayout.ObjectField("User Blob Schema", sgm.splineGraphUserBlobSchema, typeof(SplineGraphUserBlobSchemaScriptableObject), false) as SplineGraphUserBlobSchemaScriptableObject;
             if (splineGraphUserBlobSchemaNext != sgm.splineGraphUserBlobSchema)
             {
@@ -639,33 +665,37 @@ namespace Pastasfuture.SplineGraph.Runtime
                 sgm.isRenderingEnabled = isRenderingEnabledNew;
             }
 
-            bool isAutoUpdateEnabledNew = EditorGUILayout.Toggle("Is Auto Update Enabled", sgm.isAutoUpdateEnabled);
-            if (isAutoUpdateEnabledNew != sgm.isAutoUpdateEnabled)
+            if (!sgm.isReadOnly)
             {
-                sgm.UndoRecord("Toggled Spline Graph Manager isAutoUpdateEnabled");
-                sgm.isAutoUpdateEnabled = isAutoUpdateEnabledNew;
+                bool isAutoUpdateEnabledNew = EditorGUILayout.Toggle("Is Auto Update Enabled", sgm.isAutoUpdateEnabled);
+                if (isAutoUpdateEnabledNew != sgm.isAutoUpdateEnabled)
+                {
+                    sgm.UndoRecord("Toggled Spline Graph Manager isAutoUpdateEnabled");
+                    sgm.isAutoUpdateEnabled = isAutoUpdateEnabledNew;
+                }
             }
-
-            // return; // TODO: Remove?
 
             sgm.debugIsSpawnEnabled = EditorGUILayout.Toggle("Debug Is Spawn Enabled", sgm.debugIsSpawnEnabled);
             sgm.debugPosition = EditorGUILayout.Vector3Field("Debug Position", sgm.debugPosition);
             sgm.debugVelocity = EditorGUILayout.FloatField("Debug Velocity", sgm.debugVelocity);
             sgm.debugIsReverse = EditorGUILayout.Toggle("Debug Is Reverse", sgm.debugIsReverse);
 
-            int typeNew = EditorGUILayout.DelayedIntField("Type", sgm.type);
-            typeNew = math.clamp(typeNew, 0, int.MaxValue);
-            if (typeNew != sgm.type)
+            if (!sgm.isReadOnly)
             {
-                sgm.UndoRecord("Edited Spline Graph Manager Type");
-                sgm.type = typeNew;
-            }
+                int typeNew = EditorGUILayout.DelayedIntField("Type", sgm.type);
+                typeNew = math.clamp(typeNew, 0, int.MaxValue);
+                if (typeNew != sgm.type)
+                {
+                    sgm.UndoRecord("Edited Spline Graph Manager Type");
+                    sgm.type = typeNew;
+                }
 
-            if (GUILayout.Button("Build Graph From Instances"))
-            {
-                sgm.UndoRecord("Spline Graph Manager Build Graph From Instances");
+                if (GUILayout.Button("Build Graph From Instances"))
+                {
+                    sgm.UndoRecord("Spline Graph Manager Build Graph From Instances");
 
-                sgm.BuildGraphFromInstances();
+                    sgm.BuildGraphFromInstances();
+                }
             }
 
             if (!sgm.isRenderingEnabled)
@@ -770,32 +800,14 @@ namespace Pastasfuture.SplineGraph.Runtime
                     AssetDatabase.SaveAssets();
                 }
             }
-            else
+
             {
                 var binaryDataNext = EditorGUILayout.ObjectField("Spline Graph Binary Data", sgm.splineGraphBinaryData, typeof(SplineGraphBinaryDataScriptableObject), false) as SplineGraphBinaryDataScriptableObject;
                 if (binaryDataNext != sgm.splineGraphBinaryData)
                 {
                     sgm.UndoRecord("Edited Spline Graph Binary Data");
 
-                    if (sgm.splineGraphBinaryData == null && binaryDataNext != null)
-                    {
-                        // Asset was assigned where previously no asset was assigned. Overwrite any existing data with the binary data.
-                        sgm.splineGraphSerializable = null;
-                        sgm.splineGraphPayloadSerializable = null;
-                        sgm.splineGraphBinaryData = binaryDataNext;
-                    }
-                    else if (sgm.splineGraphBinaryData != null && binaryDataNext == null)
-                    {
-                        // Asset was unassigned, clear out the serialized data.
-                        sgm.splineGraphSerializable = new DirectedGraphSerializable();
-                        sgm.splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
-                        sgm.splineGraphBinaryData = null;
-                    }
-                    else
-                    {
-                        // Simple assign the new serialized data asset.
-                        sgm.splineGraphBinaryData = binaryDataNext;
-                    }
+                    sgm.SetSplineGraphBinaryDataScriptableObjectAsSource(sgm.splineGraphUserBlobSchema, binaryDataNext);
                 }
             }
         }
