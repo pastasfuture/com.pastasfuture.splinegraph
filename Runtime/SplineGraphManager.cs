@@ -59,6 +59,12 @@ namespace Pastasfuture.SplineGraph.Runtime
             }
 
             Verify();
+            
+#if UNITY_EDITOR
+            // Need to force SetDirty here. Normally, Verify() would handle this, however, it skips SetDirty if the asset is flagged as readonly.
+            // We want the contents of splineGraphBinaryData to be treated as readonly, but we want the assignment of the scriptable object reference itself to be stored to disk.
+            EditorUtility.SetDirty(this);
+#endif
         }
 
         void OnEnable()
@@ -698,36 +704,33 @@ namespace Pastasfuture.SplineGraph.Runtime
                 }
             }
 
-            if (!sgm.isRenderingEnabled)
+            if (sgm.isRenderingEnabled)
             {
-                EditorGUILayout.EndVertical();
-                return;
-            }
-
-            using (new EditorGUI.DisabledScope(true))
-            {
-                for (Int16 v = 0, vCount = (Int16)sgm.splineGraph.vertices.count; v < vCount; ++v)
+                using (new EditorGUI.DisabledScope(true))
                 {
-                    DirectedVertex vertex = sgm.splineGraph.vertices.data[v];
-                    if (vertex.IsValid() == 0) { continue; }
+                    for (Int16 v = 0, vCount = (Int16)sgm.splineGraph.vertices.count; v < vCount; ++v)
+                    {
+                        DirectedVertex vertex = sgm.splineGraph.vertices.data[v];
+                        if (vertex.IsValid() == 0) { continue; }
 
-                    EditorGUILayout.BeginVertical();
+                        EditorGUILayout.BeginVertical();
 
-                    // TODO: Convert these input fields to read-only fields.
-                    float3 position = sgm.splineGraph.payload.positions.data[v];
-                    EditorGUILayout.Vector3Field("Position", position);
+                        // TODO: Convert these input fields to read-only fields.
+                        float3 position = sgm.splineGraph.payload.positions.data[v];
+                        EditorGUILayout.Vector3Field("Position", position);
 
-                    quaternion rotation = sgm.splineGraph.payload.rotations.data[v];
-                    float3 rotationEulerDegrees = ((Quaternion)rotation).eulerAngles;
-                    EditorGUILayout.Vector3Field("Rotation", rotationEulerDegrees);
+                        quaternion rotation = sgm.splineGraph.payload.rotations.data[v];
+                        float3 rotationEulerDegrees = ((Quaternion)rotation).eulerAngles;
+                        EditorGUILayout.Vector3Field("Rotation", rotationEulerDegrees);
 
-                    float2 scale = sgm.splineGraph.payload.scales.data[v];
-                    EditorGUILayout.Vector2Field("Scale", scale);
+                        float2 scale = sgm.splineGraph.payload.scales.data[v];
+                        EditorGUILayout.Vector2Field("Scale", scale);
 
-                    float2 leash = sgm.splineGraph.payload.leashes.data[v];
-                    EditorGUILayout.Vector2Field("Leash", leash);
+                        float2 leash = sgm.splineGraph.payload.leashes.data[v];
+                        EditorGUILayout.Vector2Field("Leash", leash);
 
-                    EditorGUILayout.EndVertical();
+                        EditorGUILayout.EndVertical();
+                    }
                 }
             }
             
