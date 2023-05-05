@@ -43,6 +43,34 @@ namespace Pastasfuture.SplineGraph.Runtime
             return splineGraph;
         }
 
+        public void SetAndCopyDataFromSplineGraphBinaryDataScriptableObject(SplineGraphBinaryDataScriptableObject splineGraphBinaryDataNext)
+        {
+            if (splineGraphBinaryData != null && splineGraphBinaryDataNext == null)
+            {
+                // Asset was unassigned, clear out the serialized data.
+                splineGraphSerializable = new DirectedGraphSerializable();
+                splineGraphPayloadSerializable = new SplineGraphPayloadSerializable();
+                splineGraphBinaryData = null;
+                isDeserializationNeeded = true;
+            }
+            else
+            {
+                // Asset was assigned. Overwrite any existing data with the binary data.
+                splineGraphSerializable = null;
+                splineGraphPayloadSerializable = null;
+                splineGraphBinaryData = splineGraphBinaryDataNext;
+                isDeserializationNeeded = true;
+            }
+
+            Verify();
+
+#if UNITY_EDITOR
+            // Need to force SetDirty here. Normally, Verify() would handle this, however, it skips SetDirty if the asset is flagged as readonly.
+            // We want the contents of splineGraphBinaryData to be treated as readonly, but we want the assignment of the scriptable object reference itself to be stored to disk.
+            EditorUtility.SetDirty(this);
+#endif
+        }
+
         public void SetSplineGraphBinaryDataScriptableObjectAsSource(SplineGraphUserBlobSchemaScriptableObject userBlobSchema, SplineGraphBinaryDataScriptableObject binaryData)
         {
             splineGraphUserBlobSchema = userBlobSchema;
