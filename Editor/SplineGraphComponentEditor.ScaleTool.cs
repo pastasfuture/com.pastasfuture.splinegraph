@@ -17,6 +17,7 @@ namespace Pastasfuture.SplineGraph.Editor
 
             public float3 origin = float3.zero;
             public float3 scale = new float3(1.0f, 1.0f, 1.0f);
+            public float leashScale = 1.0f;
         }
 
         private ScaleTool scaleTool = new ScaleTool();
@@ -45,6 +46,11 @@ namespace Pastasfuture.SplineGraph.Editor
                     EditorGUILayout.EndHorizontal();
 
                     EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Leash Scale (Uniform)", GUILayout.Width(100));
+                    scaleTool.leashScale = EditorGUILayout.FloatField("", scaleTool.leashScale);
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUILayout.BeginHorizontal();
                     if (selectedIndices.Count > 0 && GUILayout.Button("Apply") && math.lengthsq(scaleTool.scale) > 1e-5f)
                     {
                         scaleTool.isFoldoutEnabled = false;
@@ -62,7 +68,15 @@ namespace Pastasfuture.SplineGraph.Editor
                             float3 forward = math.mul(rotation, new float3(0.0f, 0.0f, 1.0f));
                             float velocityScale = math.abs(math.dot(forward, scaleTool.scale));
                             sgc.splineGraph.payload.scales.data[v] = sgc.splineGraph.payload.scales.data[v] * velocityScale;
+                        }
 
+                        if (scaleTool.leashScale != 1.0f)
+                        {
+                            for (int i = 0; i < selectedIndices.Count; ++i)
+                            {
+                                Int16 v = selectedIndices[i];
+                                sgc.splineGraph.payload.leashes.data[v] = sgc.splineGraph.payload.leashes.data[v] * scaleTool.leashScale;
+                            }
                         }
 
                         for (int i = 0, iLen = selectedIndices.Count; i < iLen; ++i)
